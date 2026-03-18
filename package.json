@@ -1,25 +1,37 @@
 {
-  "name": "drk-app-template",
+  "name": "drk-hinweisgebersystem",
   "version": "1.0.0",
   "private": true,
-  "description": "DRK App Template – Starter für alle DRK-Digitalisierungstools",
+  "description": "DRK Hinweisgebersystem – Meldestelle nach HinSchG",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "next": "^16.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "drizzle-orm": "^0.38.0",
+    "postgres": "^3.4.0",
+    "bcryptjs": "^2.4.3",
+    "jose": "^6.0.0",
+    "nodemailer": "^6.9.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/bcryptjs": "^2.4.0",
+    "@types/nodemailer": "^6.4.0",
     "typescript": "^5.7.0",
     "@tailwindcss/postcss": "^4.0.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.0.0",
+    "drizzle-kit": "^0.30.0"
   }
 }

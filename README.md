@@ -1,6 +1,6 @@
-# 🏥 DRK App Template
+# 🛡️ DRK Hinweisgebersystem
 
-**Starter-Template für alle DRK-Digitalisierungstools.**
+**Digitales Hinweisgebersystem nach dem Hinweisgeberschutzgesetz (HinSchG).**
 
 Open Source · Kostenlos · DSGVO-konform
 
@@ -8,74 +8,122 @@ Open Source · Kostenlos · DSGVO-konform
 
 ## Was ist das?
 
-Dieses Repository ist der Ausgangspunkt für neue Web-Apps im DRK-Kontext. Es enthält das einheitliche Design-System, die Projektstruktur und alle Konventionen – damit jede neue App vom ersten Moment an wie eine DRK-App aussieht und funktioniert.
+Ein vollständiges Hinweisgebersystem zur Umsetzung der EU-Whistleblower-Richtlinie und des deutschen Hinweisgeberschutzgesetzes (HinSchG). Das System ermöglicht es Mitarbeitenden, Hinweise auf Rechtsverstöße vertraulich oder anonym abzugeben – digital, sicher und datenschutzkonform.
+
+Entwickelt für den DRK Kreisverband StädteRegion Aachen e.V. als gemeinsame interne Meldestelle für alle angeschlossenen Organisationen.
 
 ## ✨ Features
 
-* **DRK-Header + Footer** — Rote Leiste mit Logo, Hilfe- und Spenden-Icons
-* **Box-basiertes Layout** — Konsistente Karten-Optik auf grauem Hintergrund
-* **Zweisprachig (DE/EN)** — i18n-System von Tag 1
-* **Pflichtseiten** — Impressum, Datenschutz, Hilfe, Spenden fertig eingebaut
-* **CLAUDE.md** — Claude Code kennt sofort alle Konventionen
-* **Flexibles Deployment** — Statisch (GitHub Pages) oder Server (Docker)
-* **DSGVO-konform** — Keine Cookies, keine externen Dienste, keine Tracker
+### 🌐 Öffentliche Meldestelle
+* **Vertrauliche & anonyme Meldung** — Mehrstufiger Wizard für Hinweisabgabe
+* **Organisationsauswahl** — Hinweise gezielt an betreute Unternehmen
+* **FAQ-Bereich** — Informationen zum HinSchG direkt auf der Meldeseite
+* **Alternative Meldewege** — E-Mail und Telefon als zusätzliche Kanäle
 
-## 🚀 Schnellstart
+### 🔐 Admin-Backend
+* **Dashboard** — KPIs, Workflow-Übersicht, Aufgaben-Tracking
+* **Hinweis-Verwaltung** — Erfassen, Bearbeiten, Statusfilter (Neu/In Bearbeitung/Abgeschlossen)
+* **Workflow-System** — Relevanzprüfung, Aufgabenzuweisung, Bearbeitungsschritte
+* **Kunden-Verwaltung** — Organisationen, Kundengruppen, Mitarbeiter-Übersicht
+* **E-Mail-System** — Posteingang, Versand, Vorlagen-Verwaltung
+* **Archiv & Protokoll** — Lückenlose Dokumentation aller Bearbeitungsschritte
 
-### Neues Projekt erstellen
+### 🏗️ Technisch
+* **REST-API** — Vollständige CRUD-Endpunkte für alle Entitäten
+* **JWT-Authentifizierung** — Sichere Session-Verwaltung
+* **Rollenbasiert** — Admin- und User-Rollen
+* **Docker-Ready** — docker-compose mit PostgreSQL und Caddy
 
-1. Auf GitHub: **"Use this template"** → "Create a new repository"
-2. Repository-Name wählen (z.B. `drk-rundlauf`, `drk-protokoll`)
-3. Klonen und loslegen:
+## 🚀 Installation
+
+### Docker (empfohlen)
 
 ```bash
-git clone https://github.com/AFielen/[neuer-name].git
-cd [neuer-name]
+git clone https://github.com/AFielen/HinschG.git
+cd HinschG
+cp .env.example .env
+# .env anpassen (DATABASE_URL, JWT_SECRET, etc.)
+docker compose up -d
+```
+
+### Lokal entwickeln
+
+```bash
+git clone https://github.com/AFielen/HinschG.git
+cd HinschG
 npm install
-npm run dev
+# PostgreSQL starten und DATABASE_URL in .env setzen
+npm run db:push    # Schema in DB anlegen
+npm run dev        # Dev-Server starten
 ```
 
-### Mit Claude Code entwickeln
-
-```bash
-# Im Projektverzeichnis – Claude liest CLAUDE.md automatisch:
-claude
-```
-
-### Anpassen
-
-1. **Suche & Ersetze** `APP_TITEL` → tatsächlicher App-Name
-2. **Suche & Ersetze** `APP_BESCHREIBUNG` → Beschreibung
-3. **Logo-Dateien** in `public/` ergänzen (logo.svg, logo.png, favicon.svg)
-4. **`lib/i18n.ts`** mit app-spezifischen Übersetzungen erweitern
-5. **`next.config.ts`** → `'export'` (statisch) oder `'standalone'` (Server)
-6. **README.md** nach dem Pflicht-Format anpassen (siehe CLAUDE.md)
+Nach dem ersten Start: `POST /api/admin/seed` aufrufen, um den Admin-User anzulegen (admin / admin123).
 
 ## 🛠️ Tech-Stack
 
-* [Next.js 16](https://nextjs.org/) + [React 19](https://react.dev/)
-* [TypeScript](https://www.typescriptlang.org/)
+* [Next.js 16](https://nextjs.org/) + [React 19](https://react.dev/) (App Router, Standalone)
+* [TypeScript](https://www.typescriptlang.org/) (strict)
 * [Tailwind CSS 4](https://tailwindcss.com/)
+* [Drizzle ORM](https://orm.drizzle.team/) + PostgreSQL
+* [Jose](https://github.com/panva/jose) (JWT)
+* [Nodemailer](https://nodemailer.com/) + Mailjet (E-Mail)
+* Docker + Caddy (Deployment)
 
-## 📐 Enthalten
+## 📐 Projektstruktur
 
-| Datei | Zweck |
-|---|---|
-| `CLAUDE.md` | Konventionen für Claude Code |
-| `app/layout.tsx` | DRK-Header (❓ Hilfe + ❤️ Spenden) + Footer |
-| `app/globals.css` | DRK-Farben, Box-Klassen, Button-Styles |
-| `app/page.tsx` | Beispiel-Startseite |
-| `app/impressum/` | Impressum |
-| `app/datenschutz/` | Datenschutzerklärung |
-| `app/hilfe/` | Hilfe & FAQ |
-| `app/spenden/` | Spenden-/Unterstützungsseite |
-| `app/not-found.tsx` | Custom 404 |
-| `lib/i18n.ts` | Zweisprachigkeit DE/EN |
+```
+HinschG/
+├── app/
+│   ├── admin/                    # Backend-Seiten (geschützt)
+│   │   ├── dashboard/            # Dashboard mit KPIs
+│   │   ├── hinweise/             # Hinweis-Verwaltung
+│   │   ├── aufgaben/             # Aufgaben & Workflow
+│   │   ├── kunden/               # Kunden-Verwaltung
+│   │   ├── email/                # E-Mail-System
+│   │   ├── mitarbeiter/          # Mitarbeiter-Übersicht
+│   │   └── layout.tsx            # Admin-Layout mit Sidebar
+│   ├── api/
+│   │   ├── admin/                # Geschützte API-Endpunkte
+│   │   ├── auth/                 # Login/Logout/Session
+│   │   └── public/               # Öffentliche Endpunkte
+│   ├── meldestelle/              # Öffentliche Meldeseite
+│   │   ├── vertraulich/          # Vertrauliche Meldung
+│   │   └── anonym/               # Anonyme Meldung
+│   ├── login/                    # Login-Seite
+│   ├── impressum/                # Pflichtseite
+│   ├── datenschutz/              # Pflichtseite
+│   ├── hilfe/                    # Pflichtseite
+│   └── spenden/                  # Pflichtseite
+├── components/
+│   ├── admin/                    # Wiederverwendbare Admin-Komponenten
+│   └── meldestelle/              # Meldestelle-Komponenten
+├── lib/
+│   ├── auth/                     # JWT, Passwort, Auth-Context
+│   └── db/                       # Drizzle Schema, Verbindung, Typen
+├── Dockerfile                    # Multi-Stage Docker Build
+├── docker-compose.yml            # App + PostgreSQL + Caddy
+├── Caddyfile                     # Reverse Proxy
+├── CLAUDE.md                     # Konventionen für Claude Code
+└── INFRASTRUCTURE.md             # DSGVO-Goldstandard
+```
 
-## 🔗 Referenz-Apps
+## 🔒 Datenschutz & Sicherheit
 
-* [abstimmung](https://github.com/AFielen/abstimmung) — Digitales Abstimmungssystem
-* [auskunft](https://github.com/AFielen/auskunft) — Digitale Compliance-Selbstauskunft
+* **DSGVO-konform** — Alle Daten auf EU-Servern (Hetzner)
+* **Kein US-Dienst** in der Datenverarbeitungskette
+* **Verschlüsselte Übertragung** — TLS via Caddy/Let's Encrypt
+* **Gehashte Passwörter** — bcrypt mit 12 Runden
+* **HttpOnly Cookies** — Session-Token nicht per JavaScript auslesbar
+* **Security Headers** — X-Frame-Options, CSP, Referrer-Policy
+* **Open Source** — Vollständig auditierbar
+
+## 🤝 Beitragen
+
+1. Fork erstellen
+2. Feature-Branch: `git checkout -b feat/mein-feature`
+3. Änderungen committen: `git commit -m "feat: Beschreibung"`
+4. Push: `git push origin feat/mein-feature`
+5. Pull Request erstellen
 
 ## 📄 Lizenz
 
