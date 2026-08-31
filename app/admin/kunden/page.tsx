@@ -1,38 +1,60 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DataTable from '@/components/admin/DataTable';
 import ButtonBar, { SearchIcon, PlusIcon, EditIcon, TrashIcon } from '@/components/admin/ButtonBar';
 
-// ── Demo Data ──────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 
 interface KundeRow {
   id: number;
-  kundenName: string;
-  kundenGruppe: string;
+  firma: string;
   strasse: string;
   plz: string;
   ort: string;
-  email: string;
+  firmenEmail: string;
+  kundengruppeName: string | null;
+  createdAt: string;
 }
 
-const DEMO_DATA: KundeRow[] = [
-  { id: 1, kundenName: 'DRK Kreisverband StädteRegion Aachen e.V.', kundenGruppe: 'Kreisverband', strasse: 'Henry-Dunant-Platz 1', plz: '52146', ort: 'Würselen', email: 'info@drk-aachen.de' },
-  { id: 2, kundenName: 'DRK Ortsverein Aachen', kundenGruppe: 'Ortsverein', strasse: 'Musterstraße 10', plz: '52062', ort: 'Aachen', email: 'info@drk-ov-aachen.de' },
-  { id: 3, kundenName: 'Musterfirma GmbH', kundenGruppe: 'Unternehmen', strasse: 'Industriestr. 5', plz: '52078', ort: 'Aachen', email: 'kontakt@musterfirma.de' },
-];
+const PAGE_SIZE = 20;
+
+// Spaltenschlüssel → Sortierschlüssel der API
+const SORT_MAP: Record<string, string> = {
+  firma: 'firma',
+  ort: 'ort',
+  plz: 'plz',
+  firmenEmail: 'email',
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    // Response ohne JSON-Body
+  }
+  return fallback;
+}
 
 // ── Columns ────────────────────────────────────────────────────────────────
 
 const COLUMNS = [
-  { key: 'kundenName', label: 'Kunden Name' },
-  { key: 'kundenGruppe', label: 'Kunden Gruppe' },
-  { key: 'strasse', label: 'Straße' },
+  { key: 'firma', label: 'Kunden Name' },
+  {
+    key: 'kundengruppeName',
+    label: 'Kunden Gruppe',
+    sortable: false,
+    render: (row: KundeRow) => row.kundengruppeName ?? '—',
+  },
+  { key: 'strasse', label: 'Straße', sortable: false },
   { key: 'plz', label: 'PLZ' },
   { key: 'ort', label: 'Ort' },
-  { key: 'email', label: 'E-Mail' },
+  { key: 'firmenEmail', label: 'E-Mail' },
 ];
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -41,19 +63,98 @@ export default function KundenOverviewPage() {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [suche, setSuche] = useState(''); // debounced
   const [showSearch, setShowSearch] = useState(false);
+  const [sortKey, setSortKey] = useState<string>('firma');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return DEMO_DATA;
-    const term = searchTerm.toLowerCase();
-    return DEMO_DATA.filter(
-      (k) =>
-        k.kundenName.toLowerCase().includes(term) ||
-        k.kundenGruppe.toLowerCase().includes(term) ||
-        k.ort.toLowerCase().includes(term) ||
-        k.email.toLowerCase().includes(term),
-    );
+  const [rows, setRows] = useState<KundeRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  // Suchbegriff entprellen
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSuche(searchTerm.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
   }, [searchTerm]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setFehler(null);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+        sort: SORT_MAP[sortKey] ?? 'firma',
+        order: sortDir,
+      });
+      if (suche) params.set('search', suche);
+
+      const res = await fetch(`/api/admin/kunden?${params.toString()}`);
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Kunden konnten nicht geladen werden.'));
+        return;
+      }
+      const json = await res.json();
+      setRows(Array.isArray(json.data) ? json.data : []);
+      setTotal(typeof json.total === 'number' ? json.total : 0);
+    } catch {
+      setFehler('Kunden konnten nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, sortKey, sortDir, suche]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  function handleSortChange(key: string, dir: 'asc' | 'desc') {
+    if (!SORT_MAP[key]) return;
+    setSortKey(key);
+    setSortDir(dir);
+    setPage(1);
+  }
+
+  async function handleDelete() {
+    if (!selectedId) return;
+    const zeile = rows.find((r) => r.id === selectedId);
+    const ok = window.confirm(
+      `Kunde „${zeile?.firma ?? selectedId}“ wirklich löschen? Zugeordnete Mitarbeiter werden ebenfalls entfernt.`,
+    );
+    if (!ok) return;
+
+    setFehler(null);
+    try {
+      const res = await fetch(`/api/admin/kunden/${selectedId}`, { method: 'DELETE' });
+      if (res.status === 403) {
+        setFehler('Nur für Administratoren.');
+        return;
+      }
+      if (res.status === 409) {
+        setFehler(
+          await readErrorMessage(
+            res,
+            'Der Kunde kann nicht gelöscht werden, da noch Meldungen vorhanden sind.',
+          ),
+        );
+        return;
+      }
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Der Kunde konnte nicht gelöscht werden.'));
+        return;
+      }
+      setSelectedId(null);
+      fetchData();
+    } catch {
+      setFehler('Der Kunde konnte nicht gelöscht werden.');
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -98,10 +199,20 @@ export default function KundenOverviewPage() {
                 { label: 'Suchen', icon: <SearchIcon />, onClick: () => setShowSearch(!showSearch) },
                 { label: 'Neu', icon: <PlusIcon />, href: '/admin/kunden/neu' },
                 { label: 'Bearbeiten', icon: <EditIcon />, onClick: () => selectedId && router.push(`/admin/kunden/${selectedId}`), disabled: !selectedId },
-                { label: 'Löschen', icon: <TrashIcon />, variant: 'danger', disabled: !selectedId },
+                { label: 'Löschen', icon: <TrashIcon />, variant: 'danger', onClick: handleDelete, disabled: !selectedId },
               ]}
             />
           </div>
+
+          {/* Fehler */}
+          {fehler && (
+            <div
+              className="rounded-lg px-4 py-3 text-sm"
+              style={{ background: 'var(--error-bg)', border: '1px solid var(--error-border)', color: 'var(--error-text)' }}
+            >
+              {fehler}
+            </div>
+          )}
 
           {/* Search */}
           {showSearch && (
@@ -109,7 +220,7 @@ export default function KundenOverviewPage() {
               <input
                 type="text"
                 className="drk-input"
-                placeholder="Suche nach Kundenname, Kundengruppe, Ort, E-Mail..."
+                placeholder="Suche nach Kundenname, Ort, E-Mail..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 autoFocus
@@ -120,11 +231,19 @@ export default function KundenOverviewPage() {
           {/* Table */}
           <DataTable
             columns={COLUMNS}
-            data={filtered}
-            pageSize={20}
+            data={rows}
+            loading={loading}
+            pageSize={PAGE_SIZE}
             selectedId={selectedId}
             onRowClick={(row) => setSelectedId(row.id)}
             onRowDoubleClick={(row) => router.push(`/admin/kunden/${row.id}`)}
+            totalItems={total}
+            page={page}
+            onPageChange={setPage}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSortChange={handleSortChange}
+            emptyMessage="Keine Kunden vorhanden."
           />
         </div>
       </div>

@@ -23,6 +23,8 @@ COPY --from=builder --chown=node:node /app/lib/db/migrations ./lib/db/migrations
 # Standalone-Tracing nicht erfasst, da die App ihn nicht importiert)
 COPY --from=deps --chown=node:node /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
 COPY --from=deps --chown=node:node /app/node_modules/postgres ./node_modules/postgres
+# Upload-Verzeichnis für Anhänge (per Volume gemountet, siehe docker-compose.yml)
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node scripts/migrate.mjs && node server.js"]

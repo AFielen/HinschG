@@ -8,6 +8,7 @@ import { decryptField, encryptField } from '@/lib/crypto';
 import { generateAktenzeichen, generateZugangscode } from '@/lib/aktenzeichen';
 import { berechneFristen } from '@/lib/fristen';
 import { hashPassword } from '@/lib/auth/password';
+import { istGueltigeKategorie } from '@/lib/kategorien';
 
 const EINGANGSBESTAETIGUNG_TEXT =
   'Ihre Meldung ist bei der Meldestelle eingegangen. Diese Nachricht bestätigt den Eingang gemäß § 17 Abs. 1 HinSchG. Sie erhalten spätestens innerhalb von drei Monaten eine Rückmeldung über geplante oder ergriffene Maßnahmen. Über dieses Postfach können Sie jederzeit Rückfragen stellen und Unterlagen nachreichen.';
@@ -111,7 +112,10 @@ const createSchema = z.object({
   istAnonym: z.boolean().default(false),
   kundeId: z.number({ coerce: true }),
   meldeweg: z.enum(['Hinweisgebersystem', 'Telefon', 'Email', 'Post']).optional(),
-  kategorie: z.string().optional(),
+  kategorie: z
+    .string()
+    .refine(istGueltigeKategorie, 'Ungültige Kategorie.')
+    .optional(),
   datumVerstoss: z.string().optional(),
   beteiligte: z.string().optional(),
   meldungstext: z.string().min(1),

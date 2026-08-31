@@ -1,8 +1,9 @@
-import { and, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import { hinweise, aufgaben, emails } from './db/schema';
 import { withTenant } from './db/tenant';
 import { loescheHinweis } from './loeschung';
 import { RUECKMELDUNG_ERINNERUNG_TAGE } from './fristen';
+import { istMailKonfiguriert, sendeMail } from './mail';
 
 /**
  * Hintergrund-Jobs (Löschfristen, Fristen-Erinnerungen, E-Mail-Queue).
@@ -117,22 +118,65 @@ async function fristenErinnerungJob(): Promise<void> {
   });
 }
 
+// Einmalige Warnung pro Prozess, wenn der Mail-Versand nicht konfiguriert ist
+let mailKonfigWarnungAusgegeben = false;
+
+const MAILS_PRO_TICK = 20;
+
 /**
- * E-Mail-Warteschlange abarbeiten — vorerst Stub der nur zählt und loggt.
- * Versand folgt in Phase 3.
+ * E-Mail-Warteschlange abarbeiten: bis zu 20 wartende Mails pro Tick über
+ * Mailjet versenden (lib/mail.ts). Ohne Mail-Konfiguration bleibt die
+ * Warteschlange unangetastet (einmalige Warnung pro Prozess).
  */
 async function drainEmailQueue(): Promise<void> {
   const wartend = await withTenant('all', (tx) =>
     tx
-      .select({ id: emails.id })
+      .select({
+        id: emails.id,
+        an: emails.an,
+        betreff: emails.betreff,
+        inhalt: emails.inhalt,
+      })
       .from(emails)
-      .where(eq(emails.status, 'Warteschlange')),
+      .where(eq(emails.status, 'Warteschlange'))
+      .orderBy(asc(emails.id))
+      .limit(MAILS_PRO_TICK),
   );
 
-  if (wartend.length > 0) {
-    console.log(
-      `[Jobs] E-Mail-Queue: ${wartend.length} E-Mail(s) in Warteschlange (Versand folgt in Phase 3)`,
-    );
+  if (wartend.length === 0) return;
+
+  if (!istMailKonfiguriert()) {
+    if (!mailKonfigWarnungAusgegeben) {
+      mailKonfigWarnungAusgegeben = true;
+      console.warn(
+        '[Jobs] E-Mail-Versand nicht konfiguriert (MAILJET_API_KEY, MAILJET_SECRET_KEY, MAIL_FROM) — Warteschlange bleibt liegen',
+      );
+    }
+    return;
+  }
+
+  for (const mail of wartend) {
+    try {
+      if (!mail.an) {
+        throw new Error('Keine Empfänger-Adresse hinterlegt');
+      }
+      await sendeMail({
+        an: mail.an,
+        betreff: mail.betreff ?? '',
+        inhalt: mail.inhalt ?? '',
+      });
+      await withTenant('all', (tx) =>
+        tx.update(emails).set({ status: 'Gesendet' }).where(eq(emails.id, mail.id)),
+      );
+    } catch (err) {
+      console.error(
+        `[Jobs] E-Mail ${mail.id} konnte nicht gesendet werden:`,
+        err,
+      );
+      await withTenant('all', (tx) =>
+        tx.update(emails).set({ status: 'Fehler' }).where(eq(emails.id, mail.id)),
+      );
+    }
   }
 }
 

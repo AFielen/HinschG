@@ -1,55 +1,180 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface VorlageFormState {
+  templateName: string;
+  fromName: string;
+  subject: string;
+  htmlContent: string;
+  hasAttachment: boolean;
+}
+
+const EMPTY_FORM: VorlageFormState = {
+  templateName: '',
+  fromName: '',
+  subject: '',
+  htmlContent: '',
+  hasAttachment: false,
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    // Response ohne JSON-Body
+  }
+  return fallback;
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
 
 export default function EmailVorlageEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const isNeu = id === 'neu';
+
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(!isNeu);
+  const [dirty, setDirty] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
+  const [erfolg, setErfolg] = useState<string | null>(null);
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [form, setForm] = useState({
-    templateName: '',
-    fromName: '',
-    subject: '',
-    htmlContent: '',
-    hasAttachment: false,
-  });
+  const [form, setForm] = useState<VorlageFormState>(EMPTY_FORM);
 
-  // Load demo data
+  // Vorlage laden (nur im Edit-Modus)
   useEffect(() => {
-    // TODO: fetch from /api/admin/email-vorlagen/[id]
-    setForm({
-      templateName: 'Eingangsbestätigung',
-      fromName: 'Meldestelle',
-      subject: 'Eingangsbestätigung Ihrer Meldung',
-      htmlContent: '<h1>Eingangsbestätigung</h1>\n<p>Sehr geehrte/r Hinweisgeber/in,</p>\n<p>wir haben Ihre Meldung mit dem Aktenzeichen <strong>{{aktenzeichen}}</strong> erhalten.</p>\n<p>Wir werden Ihre Meldung umgehend prüfen und uns innerhalb von 7 Tagen bei Ihnen melden.</p>\n<p>Mit freundlichen Grüßen<br/>Interne Meldestelle</p>',
-      hasAttachment: false,
-    });
-  }, [id]);
+    if (isNeu) return;
+    let aktiv = true;
+    (async () => {
+      setLoading(true);
+      setLadeFehler(null);
+      try {
+        const res = await fetch(`/api/admin/email-vorlagen/${id}`);
+        if (!aktiv) return;
+        if (res.status === 404) {
+          setLadeFehler('Vorlage nicht gefunden.');
+          return;
+        }
+        if (!res.ok) {
+          setLadeFehler(await readErrorMessage(res, 'Die Vorlage konnte nicht geladen werden.'));
+          return;
+        }
+        const row = await res.json();
+        if (!aktiv) return;
+        setForm({
+          templateName: row.templateName ?? '',
+          fromName: row.fromName ?? '',
+          subject: row.subject ?? '',
+          htmlContent: row.htmlContent ?? '',
+          hasAttachment: Boolean(row.hasAttachment),
+        });
+      } catch {
+        if (aktiv) setLadeFehler('Die Vorlage konnte nicht geladen werden.');
+      } finally {
+        if (aktiv) setLoading(false);
+      }
+    })();
+    return () => {
+      aktiv = false;
+    };
+  }, [id, isNeu]);
 
-  // Exit guard
+  // Exit-Guard nur bei ungespeicherten Änderungen
   useEffect(() => {
+    if (!dirty) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
+
+  // Timer beim Verlassen aufräumen
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+    };
   }, []);
 
-  function update(field: string, value: string | boolean) {
+  function update(field: keyof VorlageFormState, value: string | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setDirty(true);
   }
 
   async function handleSave() {
+    setFehler(null);
+
+    if (!form.templateName.trim()) {
+      setFehler('Bitte geben Sie einen Template-Namen an.');
+      return;
+    }
+
     setSaving(true);
     try {
-      // TODO: PUT to /api/admin/email-vorlagen/[id]
-      router.push('/admin/email/vorlagen');
+      const res = await fetch(isNeu ? '/api/admin/email-vorlagen' : `/api/admin/email-vorlagen/${id}`, {
+        method: isNeu ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateName: form.templateName.trim(),
+          fromName: form.fromName.trim(),
+          subject: form.subject.trim(),
+          htmlContent: form.htmlContent,
+          hasAttachment: form.hasAttachment,
+        }),
+      });
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Die Vorlage konnte nicht gespeichert werden.'));
+        return;
+      }
+      setDirty(false);
+      setErfolg('Vorlage gespeichert.');
+      redirectTimer.current = setTimeout(() => {
+        router.push('/admin/email/vorlagen');
+      }, 800);
+    } catch {
+      setFehler('Die Vorlage konnte nicht gespeichert werden.');
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-12 rounded"
+            style={{ background: 'var(--bg-secondary)', animation: 'pulse 1.5s ease-in-out infinite', opacity: 1 - i * 0.15 }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (ladeFehler) {
+    return (
+      <div className="drk-card space-y-3">
+        <p className="text-sm" style={{ color: 'var(--error-text)' }}>{ladeFehler}</p>
+        <Link
+          href="/admin/email/vorlagen"
+          className="inline-flex items-center gap-1.5 text-sm font-medium"
+          style={{ color: '#3d5a80' }}
+        >
+          Zurück zur Vorlagenübersicht
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -68,8 +193,12 @@ export default function EmailVorlageEditPage({ params }: { params: Promise<{ id:
             </svg>
           </Link>
           <div>
-            <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Vorlage bearbeiten</h1>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>ID: {id}</p>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
+              {isNeu ? 'Neue Vorlage' : 'Vorlage bearbeiten'}
+            </h1>
+            {!isNeu && (
+              <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>ID: {id}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -92,6 +221,21 @@ export default function EmailVorlageEditPage({ params }: { params: Promise<{ id:
           </button>
         </div>
       </div>
+
+      {/* Meldungen */}
+      {erfolg && (
+        <div className="rounded-lg px-4 py-3 text-sm" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
+          {erfolg}
+        </div>
+      )}
+      {fehler && (
+        <div
+          className="rounded-lg px-4 py-3 text-sm"
+          style={{ background: 'var(--error-bg)', border: '1px solid var(--error-border)', color: 'var(--error-text)' }}
+        >
+          {fehler}
+        </div>
+      )}
 
       {/* Form */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow)' }}>
@@ -140,6 +284,7 @@ export default function EmailVorlageEditPage({ params }: { params: Promise<{ id:
               placeholder="<html>...</html>"
             />
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              Der Inhalt wird aus Sicherheitsgründen nur als Code angezeigt (keine HTML-Vorschau).
               Verfügbare Platzhalter: {'{{aktenzeichen}}'}, {'{{hinweisgeber_name}}'}, {'{{status}}'}, {'{{datum}}'}
             </p>
           </div>

@@ -1,21 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { KATEGORIEN } from '@/lib/kategorien';
 
-const KATEGORIEN = [
-  'Sexuelle Belästigung',
-  'Diskriminierung',
-  'Betrug / Untreue',
-  'Korruption / Bestechung',
-  'Datenschutzverstöße',
-  'Arbeitsschutzverstöße',
-  'Umweltverstöße',
-  'Geldwäsche',
-  'Steuerhinterziehung',
-  'Verstöße gegen Vergaberecht',
-  'Sonstige Verstöße',
-];
+interface Kunde {
+  id: number;
+  firma: string;
+}
 
 interface FormData {
   kundeId: string;
@@ -58,6 +50,34 @@ export default function VertraulichPage() {
   const [aktenzeichen, setAktenzeichen] = useState('');
   const [zugangscode, setZugangscode] = useState('');
   const [error, setError] = useState('');
+
+  // Organisationsliste (dynamisch von /api/public/kunden)
+  const [kunden, setKunden] = useState<Kunde[]>([]);
+  const [kundenLaden, setKundenLaden] = useState(true);
+  const [kundenFehler, setKundenFehler] = useState('');
+
+  useEffect(() => {
+    let aktiv = true;
+    void (async () => {
+      try {
+        const res = await fetch('/api/public/kunden');
+        if (!res.ok) throw new Error();
+        const rows = (await res.json()) as Kunde[];
+        if (aktiv) setKunden(rows);
+      } catch {
+        if (aktiv) {
+          setKundenFehler(
+            'Die Liste der Organisationen konnte nicht geladen werden. Bitte laden Sie die Seite neu oder versuchen Sie es später erneut.',
+          );
+        }
+      } finally {
+        if (aktiv) setKundenLaden(false);
+      }
+    })();
+    return () => {
+      aktiv = false;
+    };
+  }, []);
 
   function update(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -248,10 +268,24 @@ export default function VertraulichPage() {
                 className="drk-input"
                 value={form.kundeId}
                 onChange={(e) => update('kundeId', e.target.value)}
+                disabled={kundenLaden || kundenFehler !== ''}
+                required
               >
-                <option value="">Bitte wählen...</option>
-                <option value="1">DRK Kreisverband StädteRegion Aachen e.V.</option>
+                <option value="">
+                  {kundenLaden ? 'Wird geladen...' : 'Bitte wählen...'}
+                </option>
+                {kunden.map((k) => (
+                  <option key={k.id} value={String(k.id)}>{k.firma}</option>
+                ))}
               </select>
+              {kundenFehler && (
+                <div
+                  className="rounded-lg p-3 text-sm mt-3"
+                  style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}
+                >
+                  {kundenFehler}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -398,6 +432,10 @@ export default function VertraulichPage() {
               </SummarySection>
 
               <SummarySection title="Meldung">
+                <SummaryRow
+                  label="Organisation"
+                  value={kunden.find((k) => String(k.id) === form.kundeId)?.firma ?? ''}
+                />
                 <SummaryRow label="Kategorie" value={form.kategorie} />
                 <SummaryRow label="Datum des Verstoßes" value={form.datumVerstoss} />
                 <SummaryRow label="Beteiligte" value={form.beteiligte} />

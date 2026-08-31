@@ -19,6 +19,20 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - `system_protokoll`-Tabelle + `GET /api/admin/protokoll` (Logins, Fehlversuche, Benutzer-/Seed-Ereignisse)
 - `POST /api/admin/hinweise/[id]/nachricht` (Antwort an Hinweisgeber, optional als Rückmeldung § 17 Abs. 2)
 - Aktenzeichen aus `lib/aktenzeichen.ts` (crypto.randomInt, Kollisions-Retry) statt `Math.random()`
+- **Datei-Anhänge:** `anhaenge`-Tabelle (Migration 0003), `lib/anhaenge.ts` (10-MB-Limit, MIME-Whitelist, UUID-Speicherung in `UPLOAD_DIR`), Upload/Download im Postfach (`/api/public/postfach/anhang*`) und Admin (`/api/admin/hinweise/[id]/anhang`, `/api/admin/anhaenge/[id]`), Docker-Volume `uploads`
+- **E-Mail-Versand:** `lib/mail.ts` (nodemailer, Mailjet-SMTP), Queue-Worker in `lib/jobs.ts` (max 20/Tick), automatische Eingangsbestätigungs-E-Mail bei vertraulicher Meldung (ohne Zugangscode)
+- `lib/kategorien.ts` — zentrale Kategorienliste, serverseitig validiert (public + admin)
+- `GET /api/health` (Status/Version/Timestamp)
+- `GET /api/admin/users?zweck=zuweisung` — Bearbeiter-Auswahl für Zuweisungen (alle eingeloggten Nutzer)
+
+### Changed
+
+- **Admin-UI vollständig an die APIs angebunden** (Demo-Daten entfernt): Hinweise-Liste/-Detail/-Erfassung (`HinweisForm` mit Nachrichten-Thread, Rückmeldungs-Checkbox, Anhängen, Fristen-Infobox, Zugangscode-Anzeige nach Erfassung), Aufgaben (Workflow-Schritte, Zuweisen/Abschließen/Bearbeiten, Relevanzentscheidung), Dashboard (Fristen-Karte, Zeitraum-Refetch, korrigierte KPI-Anbindung), Kunden inkl. Mitarbeiter-CRUD, Mitarbeiter-Übersicht, E-Mail (echter Posteingang/Warteschlange, Senden in Queue, Vorlagen-Editor speichert)
+- Melde-Wizards: Organisationsauswahl dynamisch aus `GET /api/public/kunden`, Kategorien aus `lib/kategorien.ts`
+- `DataTable`: Sortier-Bug behoben (leere Seite nach Sortierklick), optionale server-seitige Pagination/Sortierung
+- Aufruf der nicht existierenden Route `/api/admin/aufgaben/[id]/workflow` entfernt; tote Buttons (OAuth, Abrufen, Konten verwalten u.a.) entfernt oder verdrahtet
+- `lib/loeschung.ts` löscht Anhänge (DB + Dateien) mit
+- End-to-End-Smoke-Test bestanden: Meldung → Postfach → Admin-Kommunikation → Upload → Mandanten-Scope (PostgreSQL 16, Standalone-Build)
 - `lib/rate-limit.ts` — In-Memory-Rate-Limiter (Sliding Window); aktiv auf Login (5/15 Min) und öffentlicher Meldungsabgabe (5/Std)
 - Benutzerverwaltung: API `/api/admin/users`, `/api/admin/users/[id]`, `/api/admin/me/password` (nur Rolle `admin` bzw. eigenes Passwort) und Admin-Seite `/admin/benutzer` inkl. „Eigenes Passwort ändern"
 - `requireRole()` in `lib/auth/middleware.ts` für rollenbasierte API-Autorisierung

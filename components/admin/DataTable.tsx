@@ -22,6 +22,15 @@ interface DataTableProps<T extends { id: number }> {
   selectedId?: number | null;
   emptyMessage?: string;
   loading?: boolean;
+  /** Server-seitige Pagination: Gesamtanzahl aller Zeilen (data enthält nur die aktuelle Seite). */
+  totalItems?: number;
+  /** Server-seitige Pagination: aktuelle Seite (1-basiert), zusammen mit onPageChange. */
+  page?: number;
+  onPageChange?: (page: number) => void;
+  /** Server-seitige Sortierung: aktueller Sortierschlüssel und Richtung, zusammen mit onSortChange. */
+  sortKey?: string | null;
+  sortDir?: SortDir;
+  onSortChange?: (key: string, dir: SortDir) => void;
 }
 
 type SortDir = 'asc' | 'desc';
@@ -37,36 +46,64 @@ export default function DataTable<T extends { id: number }>({
   selectedId,
   emptyMessage = 'Keine Einträge vorhanden.',
   loading = false,
+  totalItems,
+  page: controlledPage,
+  onPageChange,
+  sortKey: controlledSortKey,
+  sortDir: controlledSortDir,
+  onSortChange,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [page, setPage] = useState(1);
+  const [localSortKey, setLocalSortKey] = useState<string | null>(null);
+  const [localSortDir, setLocalSortDir] = useState<SortDir>('asc');
+  const [localPage, setLocalPage] = useState(1);
+
+  // Server-Modus: Sortierung/Pagination werden von außen gesteuert
+  const serverSort = onSortChange !== undefined;
+  const serverPage = onPageChange !== undefined;
+
+  const sortKey = serverSort ? (controlledSortKey ?? null) : localSortKey;
+  const sortDir = serverSort ? (controlledSortDir ?? 'asc') : localSortDir;
+  const page = serverPage ? (controlledPage ?? 1) : localPage;
 
   function handleSort(key: string) {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
+    if (serverSort) {
+      const dir: SortDir = sortKey === key && sortDir === 'asc' ? 'desc' : 'asc';
+      onSortChange?.(key, dir);
+      return;
     }
-    setPage(0);
+    if (localSortKey === key) {
+      setLocalSortDir(localSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setLocalSortKey(key);
+      setLocalSortDir('asc');
+    }
+    setLocalPage(1);
+  }
+
+  function handlePageChange(next: number) {
+    if (serverPage) {
+      onPageChange?.(next);
+    } else {
+      setLocalPage(next);
+    }
   }
 
   const sorted = useMemo(() => {
-    if (!sortKey) return data;
+    if (serverSort || !localSortKey) return data;
     return [...data].sort((a, b) => {
-      const aVal = (a as Record<string, unknown>)[sortKey];
-      const bVal = (b as Record<string, unknown>)[sortKey];
+      const aVal = (a as Record<string, unknown>)[localSortKey];
+      const bVal = (b as Record<string, unknown>)[localSortKey];
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return 1;
       if (bVal == null) return -1;
       const cmp = String(aVal).localeCompare(String(bVal), 'de', { sensitivity: 'base' });
-      return sortDir === 'asc' ? cmp : -cmp;
+      return localSortDir === 'asc' ? cmp : -cmp;
     });
-  }, [data, sortKey, sortDir]);
+  }, [data, serverSort, localSortKey, localSortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const paged = sorted.slice((page - 1) * pageSize, page * pageSize);
+  const total = serverPage ? (totalItems ?? data.length) : sorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const paged = serverPage ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize);
 
   if (loading) {
     return (
@@ -141,13 +178,13 @@ export default function DataTable<T extends { id: number }>({
         </table>
       </div>
 
-      {sorted.length > 0 && (
+      {total > 0 && (
         <Pagination
           page={page}
           totalPages={totalPages}
-          totalItems={sorted.length}
+          totalItems={total}
           pageSize={pageSize}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
         />
       )}
     </div>

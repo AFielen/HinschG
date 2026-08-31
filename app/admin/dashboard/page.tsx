@@ -10,11 +10,10 @@ import StatusBadge from '@/components/admin/StatusBadge';
 
 interface HinweisRow {
   id: number;
-  kundenName: string;
+  kundeName: string | null;
   aktenzeichen: string;
   createdAt: string;
   istAnonym: boolean;
-  datumVerstoss: string | null;
   meldeweg: string | null;
   status: string;
 }
@@ -22,7 +21,7 @@ interface HinweisRow {
 interface AufgabeRow {
   id: number;
   titel: string;
-  hinweisAktenzeichen: string;
+  aktenzeichen: string;
   schrittName: string | null;
   faelligBis: string | null;
   bearbeiterName: string | null;
@@ -33,7 +32,24 @@ interface DashboardStats {
   abgeschlossen: number;
   avgBearbeitungszeit: number;
   inZeitBearbeitet: number;
-  letzteWoche: number[];
+}
+
+interface ChartBalken {
+  label: string;
+  value: number;
+}
+
+interface FristEintrag {
+  hinweisId: number;
+  aktenzeichen: string;
+  faelligAm: string;
+  tageRest: number;
+}
+
+interface FristenDaten {
+  eingangsbestaetigungOffen: FristEintrag[];
+  rueckmeldungUeberfaellig: FristEintrag[];
+  rueckmeldungBaldFaellig: FristEintrag[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -42,8 +58,19 @@ type MainTab = 'workflow' | 'hinweise';
 type TaskTab = 'meine' | 'unbearbeitet' | 'nichtZugewiesen' | 'abgeschlossen';
 type HinweisFilter = 'Alle' | 'Neu' | 'InBearbeitung' | 'Abgeschlossen';
 
+const TASK_TAB_PARAM: Record<TaskTab, string> = {
+  meine: 'meine',
+  unbearbeitet: 'offen',
+  nichtZugewiesen: 'nicht-zugewiesen',
+  abgeschlossen: 'abgeschlossen',
+};
+
 const HINWEIS_COLUMNS = [
-  { key: 'kundenName', label: 'Kunden Name' },
+  {
+    key: 'kundeName',
+    label: 'Kunden Name',
+    render: (row: HinweisRow) => row.kundeName ?? '—',
+  },
   { key: 'aktenzeichen', label: 'Aktenzeichen' },
   {
     key: 'createdAt',
@@ -56,23 +83,23 @@ const HINWEIS_COLUMNS = [
     render: (row: HinweisRow) => (row.istAnonym ? 'Ja' : 'Nein'),
   },
   {
-    key: 'datumVerstoss',
-    label: 'Datum Verstoß',
-    render: (row: HinweisRow) => (row.datumVerstoss ? formatDate(row.datumVerstoss) : '—'),
-  },
-  {
     key: 'meldeweg',
     label: 'Meldeweg',
     render: (row: HinweisRow) => row.meldeweg ?? '—',
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    render: (row: HinweisRow) => <StatusBadge status={row.status} />,
   },
 ];
 
 const AUFGABE_COLUMNS = [
   { key: 'titel', label: 'Aufgabe' },
   {
-    key: 'hinweisAktenzeichen',
+    key: 'aktenzeichen',
     label: 'Aktenzeichen',
-    render: (row: AufgabeRow) => row.hinweisAktenzeichen ?? '—',
+    render: (row: AufgabeRow) => row.aktenzeichen ?? '—',
   },
   {
     key: 'schrittName',
@@ -82,7 +109,18 @@ const AUFGABE_COLUMNS = [
   {
     key: 'faelligBis',
     label: 'Fällig bis',
-    render: (row: AufgabeRow) => (row.faelligBis ? formatDate(row.faelligBis) : '—'),
+    render: (row: AufgabeRow) => {
+      if (!row.faelligBis) return '—';
+      const farbe = faelligkeitsFarbe(row.faelligBis, row.status === 'Abgeschlossen');
+      return (
+        <span
+          className={farbe ? 'font-semibold' : undefined}
+          style={farbe ? { color: farbe } : undefined}
+        >
+          {formatDate(row.faelligBis)}
+        </span>
+      );
+    },
   },
   {
     key: 'status',
@@ -90,6 +128,8 @@ const AUFGABE_COLUMNS = [
     render: (row: AufgabeRow) => <StatusBadge status={row.status} />,
   },
 ];
+
+const TAG_MS = 24 * 60 * 60 * 1000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -105,6 +145,60 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Fälligkeits-Farbe: überfällig rot, in ≤ 3 Tagen fällig gelb. */
+function faelligkeitsFarbe(faelligBis: string, erledigt: boolean): string | undefined {
+  if (erledigt) return undefined;
+  const rest = new Date(faelligBis).getTime() - Date.now();
+  if (rest < 0) return '#dc2626';
+  if (rest <= 3 * TAG_MS) return '#d97706';
+  return undefined;
+}
+
+/** Lokaler Datums-Schlüssel im Format YYYY-MM-DD. */
+function datumsSchluessel(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const t = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${t}`;
+}
+
+const WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+/** Chart-Daten aufbereiten: bei 7 Tagen tageweise, sonst wochenweise gebündelt. */
+function baueChartBalken(
+  rows: { date: string; count: number }[],
+  tage: number,
+): ChartBalken[] {
+  const map = new Map(rows.map((r) => [r.date, r.count]));
+  const heute = new Date();
+
+  const taeglich: { datum: Date; value: number }[] = [];
+  for (let i = tage - 1; i >= 0; i--) {
+    const d = new Date(heute);
+    d.setDate(d.getDate() - i);
+    taeglich.push({ datum: d, value: map.get(datumsSchluessel(d)) ?? 0 });
+  }
+
+  if (tage <= 7) {
+    return taeglich.map((t) => ({
+      label: WOCHENTAGE[t.datum.getDay()],
+      value: t.value,
+    }));
+  }
+
+  // Wochenweise bündeln (ältester Tag zuerst)
+  const balken: ChartBalken[] = [];
+  for (let i = 0; i < taeglich.length; i += 7) {
+    const gruppe = taeglich.slice(i, i + 7);
+    const start = gruppe[0].datum;
+    balken.push({
+      label: `${String(start.getDate()).padStart(2, '0')}.${String(start.getMonth() + 1).padStart(2, '0')}.`,
+      value: gruppe.reduce((sum, t) => sum + t.value, 0),
+    });
+  }
+  return balken;
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -118,77 +212,104 @@ export default function DashboardPage() {
     abgeschlossen: 0,
     avgBearbeitungszeit: 0,
     inZeitBearbeitet: 0,
-    letzteWoche: [0, 0, 0, 0, 0, 0, 0],
   });
+  const [chart, setChart] = useState<ChartBalken[]>([]);
+  const [fristen, setFristen] = useState<FristenDaten | null>(null);
 
   const [hinweise, setHinweise] = useState<HinweisRow[]>([]);
   const [aufgaben, setAufgaben] = useState<AufgabeRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [aufgabenTotal, setAufgabenTotal] = useState(0);
+  const [loadingHinweise, setLoadingHinweise] = useState(true);
+  const [loadingAufgaben, setLoadingAufgaben] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // Statistiken + Chart: Zeitraum-Select löst Refetch aus
+  const fetchStats = useCallback(async () => {
+    const tage = Number(zeitraum);
     try {
-      const [statsRes, hinweiseRes, aufgabenRes] = await Promise.allSettled([
-        fetch('/api/admin/dashboard/stats'),
-        fetch('/api/admin/hinweise'),
-        fetch('/api/admin/aufgaben'),
+      const [statsRes, chartRes] = await Promise.allSettled([
+        fetch(`/api/admin/dashboard/stats?timeframe=${tage}`),
+        fetch(`/api/admin/dashboard/chart?days=${tage}`),
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
-        setStats(await statsRes.value.json());
+        const json = await statsRes.value.json();
+        setStats({
+          abgeschlossen: json.completedCount ?? 0,
+          avgBearbeitungszeit: json.avgProcessingDays ?? 0,
+          inZeitBearbeitet: json.onTimePercentage ?? 0,
+        });
       }
-      if (hinweiseRes.status === 'fulfilled' && hinweiseRes.value.ok) {
-        setHinweise(await hinweiseRes.value.json());
-      }
-      if (aufgabenRes.status === 'fulfilled' && aufgabenRes.value.ok) {
-        setAufgaben(await aufgabenRes.value.json());
+      if (chartRes.status === 'fulfilled' && chartRes.value.ok) {
+        const rows = await chartRes.value.json();
+        setChart(baueChartBalken(rows, tage));
       }
     } catch {
-      // APIs not yet available — show empty state
-    } finally {
-      setLoading(false);
+      // Statistiken bleiben leer
+    }
+  }, [zeitraum]);
+
+  // Fristen-Karte
+  const fetchFristen = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/dashboard/fristen');
+      if (res.ok) setFristen(await res.json());
+    } catch {
+      // Karte bleibt leer
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const filteredHinweise =
-    hinweisFilter === 'Alle'
-      ? hinweise
-      : hinweise.filter((h) => h.status === hinweisFilter);
-
-  const taskCounts = {
-    meine: aufgaben.filter(
-      (a) => a.bearbeiterName && a.status !== 'Abgeschlossen',
-    ).length,
-    unbearbeitet: aufgaben.filter((a) => a.status === 'Offen').length,
-    nichtZugewiesen: aufgaben.filter(
-      (a) => !a.bearbeiterName && a.status !== 'Abgeschlossen',
-    ).length,
-    abgeschlossen: aufgaben.filter((a) => a.status === 'Abgeschlossen').length,
-  };
-
-  const filteredAufgaben = (() => {
-    switch (taskTab) {
-      case 'meine':
-        return aufgaben.filter(
-          (a) => a.bearbeiterName && a.status !== 'Abgeschlossen',
-        );
-      case 'unbearbeitet':
-        return aufgaben.filter((a) => a.status === 'Offen');
-      case 'nichtZugewiesen':
-        return aufgaben.filter(
-          (a) => !a.bearbeiterName && a.status !== 'Abgeschlossen',
-        );
-      case 'abgeschlossen':
-        return aufgaben.filter((a) => a.status === 'Abgeschlossen');
+  // Aufgaben: Tab-Wechsel löst Refetch aus
+  const fetchAufgaben = useCallback(async () => {
+    setLoadingAufgaben(true);
+    try {
+      const res = await fetch(`/api/admin/aufgaben?tab=${TASK_TAB_PARAM[taskTab]}&limit=20`);
+      if (res.ok) {
+        const json = await res.json();
+        setAufgaben(json.data);
+        setAufgabenTotal(json.total);
+      }
+    } catch {
+      // Liste bleibt leer
+    } finally {
+      setLoadingAufgaben(false);
     }
-  })();
+  }, [taskTab]);
 
-  const maxBar = Math.max(...stats.letzteWoche, 1);
-  const dayLabels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  // Hinweise: Statusfilter löst Refetch aus
+  const fetchHinweise = useCallback(async () => {
+    setLoadingHinweise(true);
+    try {
+      const params = new URLSearchParams({ limit: '20' });
+      if (hinweisFilter !== 'Alle') params.set('status', hinweisFilter);
+      const res = await fetch(`/api/admin/hinweise?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        setHinweise(json.data);
+      }
+    } catch {
+      // Liste bleibt leer
+    } finally {
+      setLoadingHinweise(false);
+    }
+  }, [hinweisFilter]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    fetchFristen();
+  }, [fetchFristen]);
+
+  useEffect(() => {
+    fetchAufgaben();
+  }, [fetchAufgaben]);
+
+  useEffect(() => {
+    fetchHinweise();
+  }, [fetchHinweise]);
+
+  const maxBar = Math.max(...chart.map((b) => b.value), 1);
 
   return (
     <div className="space-y-6">
@@ -319,6 +440,9 @@ export default function DashboardPage() {
             />
           </div>
 
+          {/* Fristen-Karte */}
+          {fristen && <FristenKarte fristen={fristen} />}
+
           {/* Bar Chart */}
           <div className="drk-card">
             <div className="flex items-center justify-between mb-4">
@@ -340,7 +464,7 @@ export default function DashboardPage() {
               </select>
             </div>
             <div className="flex items-end gap-2 h-32">
-              {stats.letzteWoche.map((val, i) => (
+              {chart.map((balken, i) => (
                 <div
                   key={i}
                   className="flex-1 flex flex-col items-center gap-1"
@@ -349,21 +473,21 @@ export default function DashboardPage() {
                     className="text-xs font-semibold"
                     style={{ color: 'var(--text-muted)' }}
                   >
-                    {val}
+                    {balken.value}
                   </span>
                   <div
                     className="w-full rounded-t transition-all"
                     style={{
-                      height: `${Math.max(4, (val / maxBar) * 100)}%`,
+                      height: `${Math.max(4, (balken.value / maxBar) * 100)}%`,
                       background: '#3d5a80',
                       minHeight: '4px',
                     }}
                   />
                   <span
-                    className="text-xs"
+                    className="text-xs whitespace-nowrap"
                     style={{ color: 'var(--text-muted)' }}
                   >
-                    {dayLabels[i]}
+                    {balken.label}
                   </span>
                 </div>
               ))}
@@ -378,22 +502,10 @@ export default function DashboardPage() {
             >
               {(
                 [
-                  {
-                    key: 'meine',
-                    label: `Meine zugewiesenen Aufgaben (${taskCounts.meine})`,
-                  },
-                  {
-                    key: 'unbearbeitet',
-                    label: `Alle unbearbeiteten Aufgaben (${taskCounts.unbearbeitet})`,
-                  },
-                  {
-                    key: 'nichtZugewiesen',
-                    label: `Nicht zugewiesene Aufgaben (${taskCounts.nichtZugewiesen})`,
-                  },
-                  {
-                    key: 'abgeschlossen',
-                    label: `Abgeschlossene Aufgaben (${taskCounts.abgeschlossen})`,
-                  },
+                  { key: 'meine', label: 'Meine zugewiesenen Aufgaben' },
+                  { key: 'unbearbeitet', label: 'Alle unbearbeiteten Aufgaben' },
+                  { key: 'nichtZugewiesen', label: 'Nicht zugewiesene Aufgaben' },
+                  { key: 'abgeschlossen', label: 'Abgeschlossene Aufgaben' },
                 ] as const
               ).map((tab) => (
                 <button
@@ -412,13 +524,14 @@ export default function DashboardPage() {
                   }}
                 >
                   {tab.label}
+                  {taskTab === tab.key && !loadingAufgaben ? ` (${aufgabenTotal})` : ''}
                 </button>
               ))}
             </div>
             <DataTable
               columns={AUFGABE_COLUMNS}
-              data={filteredAufgaben}
-              loading={loading}
+              data={aufgaben}
+              loading={loadingAufgaben}
               onRowDoubleClick={(row) =>
                 router.push(`/admin/aufgaben/${row.id}`)
               }
@@ -455,23 +568,24 @@ export default function DashboardPage() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
-            <ActionBtn label="Suchen" icon="search" />
             <ActionBtn
               label="Neu"
               icon="plus"
               onClick={() => router.push('/admin/hinweise/neu')}
             />
-            <ActionBtn label="Bearbeiten" icon="edit" />
-            <ActionBtn label="Löschen" icon="trash" danger />
-            <ActionBtn label="Überprüfung starten" icon="play" />
+            <ActionBtn
+              label="Alle Hinweise anzeigen"
+              icon="list"
+              onClick={() => router.push('/admin/hinweise')}
+            />
           </div>
 
           {/* Table */}
           <div className="drk-card">
             <DataTable
               columns={HINWEIS_COLUMNS}
-              data={filteredHinweise}
-              loading={loading}
+              data={hinweise}
+              loading={loadingHinweise}
               onRowDoubleClick={(row) =>
                 router.push(`/admin/hinweise/${row.id}`)
               }
@@ -485,6 +599,100 @@ export default function DashboardPage() {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
+
+function FristenKarte({ fristen }: { fristen: FristenDaten }) {
+  return (
+    <div className="drk-card">
+      <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>
+        Fristen nach § 17 HinSchG
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <FristenGruppe
+          titel="Eingangsbestätigung offen"
+          eintraege={fristen.eingangsbestaetigungOffen}
+          farbe="#d97706"
+        />
+        <FristenGruppe
+          titel="Rückmeldung überfällig"
+          eintraege={fristen.rueckmeldungUeberfaellig}
+          farbe="#dc2626"
+        />
+        <FristenGruppe
+          titel="Rückmeldung bald fällig"
+          eintraege={fristen.rueckmeldungBaldFaellig}
+          farbe="#d97706"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FristenGruppe({
+  titel,
+  eintraege,
+  farbe,
+}: {
+  titel: string;
+  eintraege: FristEintrag[];
+  farbe: string;
+}) {
+  return (
+    <div
+      className="rounded-lg px-3.5 py-3"
+      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+          {titel}
+        </span>
+        <span
+          className="inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full text-xs font-bold"
+          style={{
+            background: eintraege.length > 0 ? `${farbe}20` : 'var(--bg-secondary)',
+            color: eintraege.length > 0 ? farbe : 'var(--text-muted)',
+          }}
+        >
+          {eintraege.length}
+        </span>
+      </div>
+      {eintraege.length === 0 ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Keine Einträge.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {eintraege.slice(0, 5).map((e) => {
+            const ueberfaellig = e.tageRest < 0;
+            return (
+              <li key={e.hinweisId} className="text-xs flex items-center justify-between gap-2">
+                <Link
+                  href={`/admin/hinweise/${e.hinweisId}`}
+                  className={`underline truncate ${ueberfaellig ? 'font-semibold' : ''}`}
+                  style={{ color: ueberfaellig ? '#dc2626' : '#3d5a80' }}
+                >
+                  {e.aktenzeichen}
+                </Link>
+                <span
+                  className={`shrink-0 ${ueberfaellig ? 'font-semibold' : ''}`}
+                  style={{ color: ueberfaellig ? '#dc2626' : 'var(--text-muted)' }}
+                >
+                  {ueberfaellig
+                    ? `${Math.abs(e.tageRest)} Tage überfällig`
+                    : `noch ${e.tageRest} Tage`}
+                </span>
+              </li>
+            );
+          })}
+          {eintraege.length > 5 && (
+            <li className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              und {eintraege.length - 5} weitere
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function KpiCard({
   label,
@@ -521,29 +729,12 @@ function ActionBtn({
   label,
   icon,
   onClick,
-  danger,
 }: {
   label: string;
   icon: string;
   onClick?: () => void;
-  danger?: boolean;
 }) {
   const icons: Record<string, React.ReactNode> = {
-    search: (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-    ),
     plus: (
       <svg
         width="14"
@@ -559,7 +750,7 @@ function ActionBtn({
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
     ),
-    edit: (
+    list: (
       <svg
         width="14"
         height="14"
@@ -570,37 +761,12 @@ function ActionBtn({
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-      </svg>
-    ),
-    trash: (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      </svg>
-    ),
-    play: (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polygon points="5 3 19 12 5 21 5 3" />
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <line x1="3" y1="6" x2="3.01" y2="6" />
+        <line x1="3" y1="12" x2="3.01" y2="12" />
+        <line x1="3" y1="18" x2="3.01" y2="18" />
       </svg>
     ),
   };
@@ -611,9 +777,9 @@ function ActionBtn({
       onClick={onClick}
       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
       style={{
-        background: danger ? 'var(--error-bg)' : 'var(--bg-secondary)',
-        color: danger ? 'var(--error-text)' : 'var(--text)',
-        border: `1px solid ${danger ? 'var(--error-border)' : 'var(--border)'}`,
+        background: 'var(--bg-secondary)',
+        color: 'var(--text)',
+        border: '1px solid var(--border)',
       }}
     >
       {icons[icon]}

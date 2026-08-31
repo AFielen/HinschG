@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { hinweise, aufgaben, archiv, nachrichten } from '@/lib/db/schema';
+import { hinweise, aufgaben, archiv, nachrichten, emails } from '@/lib/db/schema';
 import { withTenant } from '@/lib/db/tenant';
 import { generateAktenzeichen, generateZugangscode } from '@/lib/aktenzeichen';
 import { berechneFristen } from '@/lib/fristen';
 import { encryptField } from '@/lib/crypto';
 import { hashPassword } from '@/lib/auth/password';
 import { rateLimit } from '@/lib/rate-limit';
+import { istGueltigeKategorie } from '@/lib/kategorien';
 
 const EINGANGSBESTAETIGUNG_TEXT =
   'Ihre Meldung ist bei der Meldestelle eingegangen. Diese Nachricht bestätigt den Eingang gemäß § 17 Abs. 1 HinSchG. Sie erhalten spätestens innerhalb von drei Monaten eine Rückmeldung über geplante oder ergriffene Maßnahmen. Über dieses Postfach können Sie jederzeit Rückfragen stellen und Unterlagen nachreichen.';
@@ -17,7 +18,11 @@ const hinweisSchema = z.object({
   istAnonym: z.boolean().default(false),
   kundeId: z.number({ coerce: true }),
   meldeweg: z.enum(['Hinweisgebersystem', 'Telefon', 'Email', 'Post']).default('Hinweisgebersystem'),
-  kategorie: z.string().max(255).optional(),
+  kategorie: z
+    .string()
+    .max(255)
+    .refine(istGueltigeKategorie, 'Ungültige Kategorie.')
+    .optional(),
   datumVerstoss: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format JJJJ-MM-TT vorliegen.')
@@ -126,6 +131,35 @@ export async function POST(request: NextRequest) {
             inhalt: EINGANGSBESTAETIGUNG_TEXT,
             ersteller: 'System',
           });
+
+          // Eingangsbestätigung zusätzlich per E-Mail (Warteschlange),
+          // wenn eine E-Mail-Adresse angegeben wurde.
+          // WICHTIG: Der Zugangscode gehört NIEMALS in die E-Mail.
+          if (!data.istAnonym && data.hinweisgeberEmail) {
+            await tx.insert(emails).values({
+              richtung: 'Ausgang',
+              von: process.env.MAIL_FROM || 'meldestelle@drk-aachen.de',
+              an: data.hinweisgeberEmail,
+              betreff: `Eingangsbestätigung zu Ihrer Meldung ${aktenzeichen}`,
+              inhalt:
+                `Guten Tag,\n\n` +
+                `Ihre Meldung ist bei der Meldestelle eingegangen. Diese ` +
+                `E-Mail bestätigt den Eingang gemäß § 17 Abs. 1 HinSchG.\n\n` +
+                `Ihr Aktenzeichen: ${aktenzeichen}\n\n` +
+                `Sie erhalten spätestens innerhalb von drei Monaten eine ` +
+                `Rückmeldung über geplante oder ergriffene Maßnahmen. Über ` +
+                `das Postfach des Hinweisgebersystems können Sie mit Ihrem ` +
+                `Aktenzeichen und Ihrem Zugangscode jederzeit den Stand ` +
+                `einsehen, Rückfragen stellen und Unterlagen nachreichen.\n\n` +
+                `Bitte bewahren Sie Aktenzeichen und Zugangscode sicher auf — ` +
+                `aus Sicherheitsgründen wird der Zugangscode nicht per E-Mail ` +
+                `versendet und kann nicht wiederhergestellt werden.\n\n` +
+                `Mit freundlichen Grüßen\n` +
+                `Ihre Meldestelle`,
+              status: 'Warteschlange',
+              hinweisId: hinweis.id,
+            });
+          }
 
           await tx.insert(aufgaben).values({
             hinweisId: hinweis.id,

@@ -22,6 +22,13 @@
       "when": 1788158388699,
       "tag": "0002_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788159925624,
+      "tag": "0003_anhaenge",
+      "breakpoints": true
     }
   ]
 }

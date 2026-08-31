@@ -10,15 +10,24 @@ import StatusBadge from '@/components/admin/StatusBadge';
 interface AufgabeRow {
   id: number;
   titel: string;
-  hinweisAktenzeichen: string;
+  aktenzeichen: string;
   schrittName: string | null;
   faelligBis: string | null;
-  erstelltAm: string;
+  createdAt: string;
   bearbeiterName: string | null;
   status: string;
 }
 
 type Tab = 'meine' | 'offen' | 'nichtZugewiesen';
+
+const TAB_PARAM: Record<Tab, string> = {
+  meine: 'meine',
+  offen: 'offen',
+  nichtZugewiesen: 'nicht-zugewiesen',
+};
+
+const PAGE_SIZE = 20;
+const TAG_MS = 24 * 60 * 60 * 1000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -34,15 +43,26 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Fälligkeits-Farbe: überfällig rot, in ≤ 3 Tagen fällig gelb. */
+function faelligkeitsFarbe(faelligBis: string, erledigt: boolean): string | undefined {
+  if (erledigt) return undefined;
+  const rest = new Date(faelligBis).getTime() - Date.now();
+  if (rest < 0) return '#dc2626';
+  if (rest <= 3 * TAG_MS) return '#d97706';
+  return undefined;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function AufgabenPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('meine');
   const [aufgaben, setAufgaben] = useState<AufgabeRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  // Inline search filters
+  // Inline search filters (filtern die geladene Seite)
   const [filterTitel, setFilterTitel] = useState('');
   const [filterFaellig, setFilterFaellig] = useState('');
   const [filterErstellt, setFilterErstellt] = useState('');
@@ -51,56 +71,33 @@ export default function AufgabenPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/aufgaben');
+      const params = new URLSearchParams({
+        tab: TAB_PARAM[tab],
+        page: String(page),
+        limit: String(PAGE_SIZE),
+      });
+      const res = await fetch(`/api/admin/aufgaben?${params.toString()}`);
       if (res.ok) {
-        setAufgaben(await res.json());
+        const json = await res.json();
+        setAufgaben(json.data);
+        setTotal(json.total);
       }
     } catch {
-      // API not yet available
+      // Liste bleibt leer
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tab, page]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const tabCounts = useMemo(
-    () => ({
-      meine: aufgaben.filter(
-        (a) => a.bearbeiterName && a.status !== 'Abgeschlossen',
-      ).length,
-      offen: aufgaben.filter((a) => a.status === 'Offen').length,
-      nichtZugewiesen: aufgaben.filter(
-        (a) => !a.bearbeiterName && a.status !== 'Abgeschlossen',
-      ).length,
-    }),
-    [aufgaben],
-  );
-
   const filtered = useMemo(() => {
-    let rows: AufgabeRow[];
-    switch (tab) {
-      case 'meine':
-        rows = aufgaben.filter(
-          (a) => a.bearbeiterName && a.status !== 'Abgeschlossen',
-        );
-        break;
-      case 'offen':
-        rows = aufgaben.filter((a) => a.status === 'Offen');
-        break;
-      case 'nichtZugewiesen':
-        rows = aufgaben.filter(
-          (a) => !a.bearbeiterName && a.status !== 'Abgeschlossen',
-        );
-        break;
-    }
-
     const tl = filterTitel.toLowerCase();
     const bl = filterBearbeiter.toLowerCase();
 
-    return rows.filter((r) => {
+    return aufgaben.filter((r) => {
       if (tl && !r.titel.toLowerCase().includes(tl)) return false;
       if (bl && !(r.bearbeiterName ?? '').toLowerCase().includes(bl))
         return false;
@@ -108,13 +105,16 @@ export default function AufgabenPage() {
         const d = r.faelligBis.slice(0, 10);
         if (d !== filterFaellig) return false;
       }
-      if (filterErstellt && r.erstelltAm) {
-        const d = r.erstelltAm.slice(0, 10);
+      if (filterErstellt && r.createdAt) {
+        const d = r.createdAt.slice(0, 10);
         if (d !== filterErstellt) return false;
       }
       return true;
     });
-  }, [aufgaben, tab, filterTitel, filterBearbeiter, filterFaellig, filterErstellt]);
+  }, [aufgaben, filterTitel, filterBearbeiter, filterFaellig, filterErstellt]);
+
+  const gefiltert =
+    filterTitel || filterBearbeiter || filterFaellig || filterErstellt;
 
   const columns = [
     {
@@ -127,16 +127,31 @@ export default function AufgabenPage() {
       ),
     },
     {
-      key: 'faelligBis',
-      label: 'Fällig bis',
-      render: (row: AufgabeRow) =>
-        row.faelligBis ? formatDate(row.faelligBis) : '—',
+      key: 'aktenzeichen',
+      label: 'Aktenzeichen',
+      render: (row: AufgabeRow) => row.aktenzeichen ?? '—',
     },
     {
-      key: 'erstelltAm',
+      key: 'faelligBis',
+      label: 'Fällig bis',
+      render: (row: AufgabeRow) => {
+        if (!row.faelligBis) return '—';
+        const farbe = faelligkeitsFarbe(row.faelligBis, row.status === 'Abgeschlossen');
+        return (
+          <span
+            className={farbe ? 'font-semibold' : undefined}
+            style={farbe ? { color: farbe } : undefined}
+          >
+            {formatDate(row.faelligBis)}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'createdAt',
       label: 'Erstellt am',
       render: (row: AufgabeRow) =>
-        row.erstelltAm ? formatDate(row.erstelltAm) : '—',
+        row.createdAt ? formatDate(row.createdAt) : '—',
     },
     {
       key: 'bearbeiterName',
@@ -181,14 +196,10 @@ export default function AufgabenPage() {
     },
   ];
 
-  const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'meine', label: 'Meine Aufgaben', count: tabCounts.meine },
-    { key: 'offen', label: 'Offene Aufgaben', count: tabCounts.offen },
-    {
-      key: 'nichtZugewiesen',
-      label: 'Nicht zugewiesene Aufgaben',
-      count: tabCounts.nichtZugewiesen,
-    },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'meine', label: 'Meine Aufgaben' },
+    { key: 'offen', label: 'Offene Aufgaben' },
+    { key: 'nichtZugewiesen', label: 'Nicht zugewiesene Aufgaben' },
   ];
 
   return (
@@ -240,7 +251,10 @@ export default function AufgabenPage() {
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => {
+              setTab(t.key);
+              setPage(1);
+            }}
             className="px-4 py-2.5 text-sm font-semibold transition-colors rounded-t-lg whitespace-nowrap"
             style={{
               color: tab === t.key ? '#3d5a80' : 'var(--text-light)',
@@ -251,7 +265,8 @@ export default function AufgabenPage() {
               marginBottom: '-2px',
             }}
           >
-            {t.label} ({t.count})
+            {t.label}
+            {tab === t.key && !loading ? ` (${total})` : ''}
           </button>
         ))}
       </div>
@@ -307,13 +322,17 @@ export default function AufgabenPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table: bei aktiven Filtern client-seitig, sonst server-seitige Pagination */}
         <DataTable
           columns={columns}
           data={filtered}
           loading={loading}
+          pageSize={PAGE_SIZE}
           onRowDoubleClick={(row) => router.push(`/admin/aufgaben/${row.id}`)}
           emptyMessage="Keine Aufgaben vorhanden."
+          totalItems={gefiltert ? undefined : total}
+          page={gefiltert ? undefined : page}
+          onPageChange={gefiltert ? undefined : setPage}
         />
       </div>
     </div>

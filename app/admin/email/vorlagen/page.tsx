@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DataTable from '@/components/admin/DataTable';
@@ -10,28 +10,44 @@ import ButtonBar, { SearchIcon, PlusIcon, EditIcon, TrashIcon } from '@/componen
 
 interface VorlageRow {
   id: number;
-  templateName: string;
-  fromName: string;
-  subject: string;
+  templateName: string | null;
+  fromName: string | null;
+  subject: string | null;
+  htmlContent: string | null;
   hasAttachment: boolean;
   createdAt: string;
 }
 
-// ── Demo Data ──────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-const DEMO_DATA: VorlageRow[] = [
-  { id: 1, templateName: 'Eingangsbestätigung', fromName: 'Meldestelle', subject: 'Eingangsbestätigung Ihrer Meldung', hasAttachment: false, createdAt: '2026-01-10T10:00:00Z' },
-  { id: 2, templateName: 'Statusupdate', fromName: 'Meldestelle', subject: 'Statusaktualisierung zu Ihrer Meldung', hasAttachment: false, createdAt: '2026-01-15T14:00:00Z' },
-  { id: 3, templateName: 'Abschlussbericht', fromName: 'Meldestelle', subject: 'Abschlussbericht zu Ihrer Meldung', hasAttachment: true, createdAt: '2026-02-01T09:00:00Z' },
-  { id: 4, templateName: 'Rückfrage an Hinweisgeber', fromName: 'Compliance', subject: 'Rückfrage zu Ihrer Meldung', hasAttachment: false, createdAt: '2026-02-10T11:30:00Z' },
-];
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data && typeof data.error === 'string') return data.error;
+  } catch {
+    // Response ohne JSON-Body
+  }
+  return fallback;
+}
 
 // ── Columns ────────────────────────────────────────────────────────────────
 
 const COLUMNS = [
-  { key: 'templateName', label: 'Template Name' },
-  { key: 'fromName', label: 'From Name' },
-  { key: 'subject', label: 'Subject' },
+  {
+    key: 'templateName',
+    label: 'Template Name',
+    render: (row: VorlageRow) => row.templateName ?? '—',
+  },
+  {
+    key: 'fromName',
+    label: 'From Name',
+    render: (row: VorlageRow) => row.fromName ?? '—',
+  },
+  {
+    key: 'subject',
+    label: 'Subject',
+    render: (row: VorlageRow) => row.subject ?? '—',
+  },
   {
     key: 'hasAttachment',
     label: 'Attachment',
@@ -44,7 +60,7 @@ const COLUMNS = [
   },
   {
     key: 'createdAt',
-    label: 'Created on',
+    label: 'Erstellt',
     render: (row: VorlageRow) => new Date(row.createdAt).toLocaleDateString('de-DE'),
   },
 ];
@@ -57,16 +73,92 @@ export default function EmailVorlagenPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const [rows, setRows] = useState<VorlageRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [erfolg, setErfolg] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setFehler(null);
+    try {
+      const res = await fetch('/api/admin/email-vorlagen');
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Vorlagen konnten nicht geladen werden.'));
+        return;
+      }
+      const json = await res.json();
+      setRows(Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : []);
+    } catch {
+      setFehler('Vorlagen konnten nicht geladen werden.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return DEMO_DATA;
+    if (!searchTerm.trim()) return rows;
     const term = searchTerm.toLowerCase();
-    return DEMO_DATA.filter(
+    return rows.filter(
       (v) =>
-        v.templateName.toLowerCase().includes(term) ||
-        v.subject.toLowerCase().includes(term) ||
-        v.fromName.toLowerCase().includes(term),
+        (v.templateName ?? '').toLowerCase().includes(term) ||
+        (v.subject ?? '').toLowerCase().includes(term) ||
+        (v.fromName ?? '').toLowerCase().includes(term),
     );
-  }, [searchTerm]);
+  }, [rows, searchTerm]);
+
+  async function handleDuplicate() {
+    const row = rows.find((r) => r.id === selectedId);
+    if (!row) return;
+
+    setFehler(null);
+    setErfolg(null);
+    try {
+      const res = await fetch('/api/admin/email-vorlagen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateName: `${row.templateName ?? 'Vorlage'} (Kopie)`,
+          fromName: row.fromName ?? '',
+          subject: row.subject ?? '',
+          htmlContent: row.htmlContent ?? '',
+          hasAttachment: row.hasAttachment,
+        }),
+      });
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Die Vorlage konnte nicht dupliziert werden.'));
+        return;
+      }
+      setErfolg(`Vorlage „${row.templateName ?? row.id}“ wurde dupliziert.`);
+      fetchData();
+    } catch {
+      setFehler('Die Vorlage konnte nicht dupliziert werden.');
+    }
+  }
+
+  async function handleDelete() {
+    const row = rows.find((r) => r.id === selectedId);
+    if (!row) return;
+    if (!window.confirm(`Vorlage „${row.templateName ?? row.id}“ wirklich löschen?`)) return;
+
+    setFehler(null);
+    setErfolg(null);
+    try {
+      const res = await fetch(`/api/admin/email-vorlagen/${row.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setFehler(await readErrorMessage(res, 'Die Vorlage konnte nicht gelöscht werden.'));
+        return;
+      }
+      setSelectedId(null);
+      fetchData();
+    } catch {
+      setFehler('Die Vorlage konnte nicht gelöscht werden.');
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -98,7 +190,7 @@ export default function EmailVorlagenPage() {
           <ButtonBar
             buttons={[
               { label: 'Suchen', icon: <SearchIcon />, onClick: () => setShowSearch(!showSearch) },
-              { label: 'Neu', icon: <PlusIcon />, onClick: () => {} },
+              { label: 'Neu', icon: <PlusIcon />, onClick: () => router.push('/admin/email/vorlagen/neu') },
               { label: 'Bearbeiten', icon: <EditIcon />, onClick: () => selectedId && router.push(`/admin/email/vorlagen/${selectedId}`), disabled: !selectedId },
               {
                 label: 'Duplizieren',
@@ -108,11 +200,27 @@ export default function EmailVorlagenPage() {
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </svg>
                 ),
+                onClick: handleDuplicate,
                 disabled: !selectedId,
               },
-              { label: 'Löschen', icon: <TrashIcon />, variant: 'danger', disabled: !selectedId },
+              { label: 'Löschen', icon: <TrashIcon />, variant: 'danger', onClick: handleDelete, disabled: !selectedId },
             ]}
           />
+
+          {/* Meldungen */}
+          {erfolg && (
+            <div className="rounded-lg px-4 py-3 text-sm" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
+              {erfolg}
+            </div>
+          )}
+          {fehler && (
+            <div
+              className="rounded-lg px-4 py-3 text-sm"
+              style={{ background: 'var(--error-bg)', border: '1px solid var(--error-border)', color: 'var(--error-text)' }}
+            >
+              {fehler}
+            </div>
+          )}
 
           {showSearch && (
             <div className="drk-fade-in">
@@ -130,10 +238,12 @@ export default function EmailVorlagenPage() {
           <DataTable
             columns={COLUMNS}
             data={filtered}
+            loading={loading}
             pageSize={20}
             selectedId={selectedId}
             onRowClick={(row) => setSelectedId(row.id)}
             onRowDoubleClick={(row) => router.push(`/admin/email/vorlagen/${row.id}`)}
+            emptyMessage="Keine Vorlagen vorhanden."
           />
         </div>
       </div>

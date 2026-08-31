@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { users, kunden, systemProtokoll } from '@/lib/db/schema';
-import { requireRole } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
 import { hashPassword } from '@/lib/auth/password';
 
 const safeUserColumns = {
@@ -19,6 +19,26 @@ const safeUserColumns = {
 
 export async function GET(request: NextRequest) {
   try {
+    const zweck = new URL(request.url).searchParams.get('zweck');
+
+    // Benutzer-Auswahl für Aufgaben-Zuweisung: für jeden eingeloggten
+    // Benutzer erlaubt, liefert nur aktive Benutzer mit Minimal-Feldern.
+    if (zweck === 'zuweisung') {
+      await requireAuth(request);
+
+      const rows = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          username: users.username,
+        })
+        .from(users)
+        .where(eq(users.active, true))
+        .orderBy(users.displayName);
+
+      return NextResponse.json({ data: rows });
+    }
+
     await requireRole(request, 'admin');
 
     const rows = await db

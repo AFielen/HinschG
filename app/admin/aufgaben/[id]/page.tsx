@@ -12,23 +12,35 @@ interface AufgabeDetail {
   id: number;
   titel: string;
   beschreibung: string | null;
-  hinweisId: number | null;
-  hinweisAktenzeichen: string | null;
+  status: string;
+  schritt: number;
   schrittName: string | null;
   faelligBis: string | null;
-  erstelltAm: string;
+  startDatum: string | null;
+  erledigtAm: string | null;
+  hinweisId: number;
+  aktenzeichen: string | null;
+  bearbeiterId: number | null;
   bearbeiterName: string | null;
-  status: string;
-  kommentar: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface WorkflowSchritt {
+interface BenutzerOption {
   id: number;
-  name: string;
-  status: string;
-  faelligBis: string | null;
-  bearbeiterName: string | null;
+  displayName: string | null;
+  username: string;
 }
+
+// Die vier festen Workflow-Schritte des HinSchG-Prozesses
+const WORKFLOW_SCHRITTE = [
+  'Relevanzprüfung',
+  'Sachverhaltsermittlung',
+  'Folgemaßnahmen',
+  'Abschluss',
+];
+
+const TAG_MS = 24 * 60 * 60 * 1000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -58,6 +70,15 @@ function formatDateTime(iso: string): string {
   }
 }
 
+/** Fälligkeits-Farbe: überfällig rot, in ≤ 3 Tagen fällig gelb. */
+function faelligkeitsFarbe(faelligBis: string, erledigt: boolean): string | undefined {
+  if (erledigt) return undefined;
+  const rest = new Date(faelligBis).getTime() - Date.now();
+  if (rest < 0) return '#dc2626';
+  if (rest <= 3 * TAG_MS) return '#d97706';
+  return undefined;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function AufgabeDetailPage() {
@@ -66,25 +87,36 @@ export default function AufgabeDetailPage() {
   const id = params.id as string;
 
   const [aufgabe, setAufgabe] = useState<AufgabeDetail | null>(null);
-  const [schritte, setSchritte] = useState<WorkflowSchritt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [aktion, setAktion] = useState(false);
+
+  // Bearbeiten-Panel
+  const [bearbeiten, setBearbeiten] = useState(false);
+  const [editTitel, setEditTitel] = useState('');
+  const [editBeschreibung, setEditBeschreibung] = useState('');
+  const [editFaelligBis, setEditFaelligBis] = useState('');
+
+  // Zuweisen-Panel
+  const [zuweisen, setZuweisen] = useState(false);
+  const [benutzer, setBenutzer] = useState<BenutzerOption[]>([]);
+  const [zuweisungId, setZuweisungId] = useState('');
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
-      const [aufgabeRes, schritteRes] = await Promise.allSettled([
-        fetch(`/api/admin/aufgaben/${id}`),
-        fetch(`/api/admin/aufgaben/${id}/workflow`),
-      ]);
-
-      if (aufgabeRes.status === 'fulfilled' && aufgabeRes.value.ok) {
-        setAufgabe(await aufgabeRes.value.json());
+      const res = await fetch(`/api/admin/aufgaben/${id}`);
+      if (res.status === 404) {
+        setFehler('Die Aufgabe wurde nicht gefunden.');
+        return;
       }
-      if (schritteRes.status === 'fulfilled' && schritteRes.value.ok) {
-        setSchritte(await schritteRes.value.json());
+      if (!res.ok) {
+        setFehler('Die Aufgabe konnte nicht geladen werden.');
+        return;
       }
+      setAufgabe(await res.json());
+      setFehler(null);
     } catch {
-      // API not yet available
+      setFehler('Die Aufgabe konnte nicht geladen werden.');
     } finally {
       setLoading(false);
     }
@@ -93,6 +125,120 @@ export default function AufgabeDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Benutzer-Auswahl für die Zuweisung laden (für jeden eingeloggten Benutzer)
+  useEffect(() => {
+    if (!zuweisen || benutzer.length > 0) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/users?zweck=zuweisung');
+        if (!res.ok) return;
+        const json = await res.json();
+        setBenutzer(json.data ?? []);
+      } catch {
+        // Auswahl bleibt leer
+      }
+    })();
+  }, [zuweisen, benutzer.length]);
+
+  async function sendePut(body: Record<string, unknown>, fehlermeldung: string): Promise<boolean> {
+    setFehler(null);
+    setAktion(true);
+    try {
+      const res = await fetch(`/api/admin/aufgaben/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setFehler(json?.error ?? fehlermeldung);
+        return false;
+      }
+      await fetchData();
+      return true;
+    } catch {
+      setFehler(fehlermeldung);
+      return false;
+    } finally {
+      setAktion(false);
+    }
+  }
+
+  function handleBearbeitenOeffnen() {
+    if (!aufgabe) return;
+    setEditTitel(aufgabe.titel);
+    setEditBeschreibung(aufgabe.beschreibung ?? '');
+    setEditFaelligBis(aufgabe.faelligBis ? aufgabe.faelligBis.slice(0, 10) : '');
+    setBearbeiten(true);
+    setZuweisen(false);
+  }
+
+  async function handleBearbeitenSpeichern() {
+    if (!editTitel.trim()) {
+      setFehler('Der Titel darf nicht leer sein.');
+      return;
+    }
+    const ok = await sendePut(
+      {
+        titel: editTitel.trim(),
+        beschreibung: editBeschreibung,
+        faelligBis: editFaelligBis || null,
+      },
+      'Die Aufgabe konnte nicht gespeichert werden.',
+    );
+    if (ok) setBearbeiten(false);
+  }
+
+  function handleZuweisenOeffnen() {
+    if (!aufgabe) return;
+    setZuweisungId(aufgabe.bearbeiterId !== null ? String(aufgabe.bearbeiterId) : '');
+    setZuweisen(true);
+    setBearbeiten(false);
+  }
+
+  async function handleZuweisenSpeichern() {
+    const ok = await sendePut(
+      { bearbeiterId: zuweisungId ? Number(zuweisungId) : null },
+      'Der Bearbeiter konnte nicht zugewiesen werden.',
+    );
+    if (ok) setZuweisen(false);
+  }
+
+  async function handleAbschliessen() {
+    if (!window.confirm('Aufgabe wirklich abschließen?')) return;
+    await sendePut({ status: 'Abgeschlossen' }, 'Die Aufgabe konnte nicht abgeschlossen werden.');
+  }
+
+  async function handleEntscheidung(relevant: boolean) {
+    if (
+      !relevant &&
+      !window.confirm(
+        'Meldung als nicht relevant einstufen? Aufgabe und Hinweis werden abgeschlossen.',
+      )
+    ) {
+      return;
+    }
+    setFehler(null);
+    setAktion(true);
+    try {
+      const res = await fetch(`/api/admin/aufgaben/${id}/entscheidung`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relevant }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setFehler(json?.error ?? 'Die Entscheidung konnte nicht gespeichert werden.');
+        return;
+      }
+      await fetchData();
+    } catch {
+      setFehler('Die Entscheidung konnte nicht gespeichert werden.');
+    } finally {
+      setAktion(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -111,6 +257,12 @@ export default function AufgabeDetailPage() {
       </div>
     );
   }
+
+  const abgeschlossen = aufgabe?.status === 'Abgeschlossen';
+  const faelligFarbe =
+    aufgabe?.faelligBis != null
+      ? faelligkeitsFarbe(aufgabe.faelligBis, abgeschlossen)
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -144,7 +296,7 @@ export default function AufgabeDetailPage() {
             >
               {aufgabe?.titel ?? `Aufgabe #${id}`}
             </h1>
-            {aufgabe?.hinweisAktenzeichen && (
+            {aufgabe?.aktenzeichen && (
               <p
                 className="text-sm mt-0.5"
                 style={{ color: 'var(--text-light)' }}
@@ -155,7 +307,7 @@ export default function AufgabeDetailPage() {
                   className="underline"
                   style={{ color: '#3d5a80' }}
                 >
-                  {aufgabe.hinweisAktenzeichen}
+                  {aufgabe.aktenzeichen}
                 </Link>
               </p>
             )}
@@ -166,178 +318,333 @@ export default function AufgabeDetailPage() {
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Case details */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Aufgabe Details */}
-          <CollapsibleSection title="Aufgaben-Details" defaultOpen>
-            <div className="space-y-4">
-              <DetailRow label="Titel" value={aufgabe?.titel} />
-              <DetailRow label="Status" value={aufgabe?.status}>
-                {aufgabe && <StatusBadge status={aufgabe.status} />}
-              </DetailRow>
-              <DetailRow label="Schritt" value={aufgabe?.schrittName} />
-              <DetailRow
-                label="Fällig bis"
-                value={
-                  aufgabe?.faelligBis
-                    ? formatDate(aufgabe.faelligBis)
-                    : undefined
-                }
-              />
-              <DetailRow
-                label="Erstellt am"
-                value={
-                  aufgabe?.erstelltAm
-                    ? formatDateTime(aufgabe.erstelltAm)
-                    : undefined
-                }
-              />
-              <DetailRow
-                label="Bearbeiter"
-                value={aufgabe?.bearbeiterName}
-              />
-            </div>
-          </CollapsibleSection>
-
-          {/* Beschreibung */}
-          <CollapsibleSection title="Beschreibung" defaultOpen>
-            <div
-              className="text-sm leading-relaxed"
-              style={{ color: 'var(--text-light)' }}
-            >
-              {aufgabe?.beschreibung ?? (
-                <span style={{ color: 'var(--text-muted)' }}>
-                  Keine Beschreibung vorhanden.
-                </span>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* Kommentar */}
-          <CollapsibleSection title="Kommentar" defaultOpen={false}>
-            <div
-              className="text-sm leading-relaxed"
-              style={{ color: 'var(--text-light)' }}
-            >
-              {aufgabe?.kommentar ?? (
-                <span style={{ color: 'var(--text-muted)' }}>
-                  Kein Kommentar vorhanden.
-                </span>
-              )}
-            </div>
-          </CollapsibleSection>
+      {/* Fehler */}
+      {fehler && (
+        <div
+          className="rounded-lg px-4 py-3 text-sm"
+          style={{ background: 'var(--error-bg)', border: '1px solid var(--error-border)', color: 'var(--error-text)' }}
+        >
+          {fehler}
         </div>
+      )}
 
-        {/* Right column: Workflow Sidebar */}
-        <div className="space-y-4">
-          {/* Workflow Steps */}
-          <div
-            className="rounded-lg overflow-hidden"
-            style={{ border: '1px solid var(--border)' }}
-          >
-            <div
-              className="px-4 py-3 text-sm font-semibold"
-              style={{ background: '#3d5a80', color: '#ffffff' }}
-            >
-              Workflow-Schritte
-            </div>
-            <div style={{ background: 'var(--bg-card)' }}>
-              {schritte.length === 0 ? (
-                <div
-                  className="px-4 py-6 text-sm text-center"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Keine Workflow-Schritte vorhanden.
+      {!aufgabe ? (
+        <Link
+          href="/admin/aufgaben"
+          className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90"
+          style={{ background: '#3d5a80', minHeight: '44px' }}
+        >
+          Zur Übersicht
+        </Link>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: Case details */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Aufgabe Details */}
+            <CollapsibleSection title="Aufgaben-Details" defaultOpen>
+              <div className="space-y-4">
+                <DetailRow label="Titel" value={aufgabe.titel} />
+                <DetailRow label="Status">
+                  <StatusBadge status={aufgabe.status} />
+                </DetailRow>
+                <DetailRow
+                  label="Schritt"
+                  value={
+                    aufgabe.schrittName
+                      ? `${aufgabe.schritt} — ${aufgabe.schrittName}`
+                      : String(aufgabe.schritt)
+                  }
+                />
+                <DetailRow label="Fällig bis">
+                  {aufgabe.faelligBis ? (
+                    <span
+                      className={`text-sm ${faelligFarbe ? 'font-semibold' : ''}`}
+                      style={{ color: faelligFarbe ?? 'var(--text-light)' }}
+                    >
+                      {formatDate(aufgabe.faelligBis)}
+                      {faelligFarbe === '#dc2626' && ' — überfällig'}
+                    </span>
+                  ) : (
+                    <span className="text-sm" style={{ color: 'var(--text-light)' }}>—</span>
+                  )}
+                </DetailRow>
+                <DetailRow
+                  label="Erstellt am"
+                  value={formatDateTime(aufgabe.createdAt)}
+                />
+                {aufgabe.erledigtAm && (
+                  <DetailRow
+                    label="Erledigt am"
+                    value={formatDateTime(aufgabe.erledigtAm)}
+                  />
+                )}
+                <DetailRow
+                  label="Bearbeiter"
+                  value={aufgabe.bearbeiterName}
+                />
+              </div>
+            </CollapsibleSection>
+
+            {/* Beschreibung */}
+            <CollapsibleSection title="Beschreibung" defaultOpen>
+              <div
+                className="text-sm leading-relaxed whitespace-pre-wrap"
+                style={{ color: 'var(--text-light)' }}
+              >
+                {aufgabe.beschreibung || (
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    Keine Beschreibung vorhanden.
+                  </span>
+                )}
+              </div>
+            </CollapsibleSection>
+
+            {/* Bearbeiten-Panel */}
+            {bearbeiten && (
+              <CollapsibleSection title="Aufgabe bearbeiten" defaultOpen>
+                <div className="space-y-4">
+                  <div>
+                    <label className="drk-label">Titel *</label>
+                    <input
+                      type="text"
+                      className="drk-input"
+                      value={editTitel}
+                      onChange={(e) => setEditTitel(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="drk-label">Beschreibung</label>
+                    <textarea
+                      className="drk-input"
+                      rows={4}
+                      value={editBeschreibung}
+                      onChange={(e) => setEditBeschreibung(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="drk-label">Fällig bis</label>
+                    <input
+                      type="date"
+                      className="drk-input"
+                      value={editFaelligBis}
+                      onChange={(e) => setEditFaelligBis(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleBearbeitenSpeichern}
+                      disabled={aktion}
+                      className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: '#3d5a80', minHeight: '44px' }}
+                    >
+                      {aktion ? 'Speichert...' : 'Speichern'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBearbeiten(false)}
+                      className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors"
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        color: 'var(--text)',
+                        border: '1px solid var(--border)',
+                        minHeight: '44px',
+                      }}
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
                 </div>
-              ) : (
+              </CollapsibleSection>
+            )}
+
+            {/* Zuweisen-Panel */}
+            {zuweisen && (
+              <CollapsibleSection title="Bearbeiter zuweisen" defaultOpen>
+                <div className="space-y-4">
+                  <div>
+                    <label className="drk-label">Bearbeiter</label>
+                    <select
+                      className="drk-input"
+                      value={zuweisungId}
+                      onChange={(e) => setZuweisungId(e.target.value)}
+                    >
+                      <option value="">— nicht zugewiesen —</option>
+                      {benutzer.map((b) => (
+                        <option key={b.id} value={String(b.id)}>
+                          {b.displayName || b.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleZuweisenSpeichern}
+                      disabled={aktion}
+                      className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: '#3d5a80', minHeight: '44px' }}
+                    >
+                      {aktion ? 'Speichert...' : 'Zuweisen'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZuweisen(false)}
+                      className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors"
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        color: 'var(--text)',
+                        border: '1px solid var(--border)',
+                        minHeight: '44px',
+                      }}
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* Entscheidung bei Relevanzprüfung */}
+            {aufgabe.schritt === 1 && !abgeschlossen && (
+              <div
+                className="rounded-lg px-4 py-4"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+              >
+                <h2 className="text-sm font-bold mb-1" style={{ color: 'var(--text)' }}>
+                  Relevanzprüfung
+                </h2>
+                <p className="text-sm mb-3" style={{ color: 'var(--text-light)' }}>
+                  Fällt die Meldung in den Anwendungsbereich des HinSchG und ist sie stichhaltig?
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEntscheidung(true)}
+                    disabled={aktion}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#059669', minHeight: '44px' }}
+                  >
+                    Relevant → Sachverhaltsermittlung
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEntscheidung(false)}
+                    disabled={aktion}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#dc2626', minHeight: '44px' }}
+                  >
+                    Nicht relevant → Abschließen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right column: Workflow Sidebar */}
+          <div className="space-y-4">
+            {/* Workflow Steps */}
+            <div
+              className="rounded-lg overflow-hidden"
+              style={{ border: '1px solid var(--border)' }}
+            >
+              <div
+                className="px-4 py-3 text-sm font-semibold"
+                style={{ background: '#3d5a80', color: '#ffffff' }}
+              >
+                Workflow-Schritte
+              </div>
+              <div style={{ background: 'var(--bg-card)' }}>
                 <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                  {schritte.map((s, idx) => (
+                  {WORKFLOW_SCHRITTE.map((name, idx) => (
                     <WorkflowStep
-                      key={s.id}
-                      schritt={s}
-                      index={idx}
-                      isActive={s.name === aufgabe?.schrittName}
+                      key={name}
+                      name={name}
+                      nummer={idx + 1}
+                      isComplete={idx + 1 < aufgabe.schritt || abgeschlossen}
+                      isActive={idx + 1 === aufgabe.schritt && !abgeschlossen}
                     />
                   ))}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
 
-          {/* Quick Actions */}
-          <div
-            className="rounded-lg overflow-hidden"
-            style={{ border: '1px solid var(--border)' }}
-          >
+            {/* Quick Actions */}
             <div
-              className="px-4 py-3 text-sm font-semibold"
-              style={{ background: '#3d5a80', color: '#ffffff' }}
+              className="rounded-lg overflow-hidden"
+              style={{ border: '1px solid var(--border)' }}
             >
-              Aktionen
+              <div
+                className="px-4 py-3 text-sm font-semibold"
+                style={{ background: '#3d5a80', color: '#ffffff' }}
+              >
+                Aktionen
+              </div>
+              <div className="p-4 space-y-2" style={{ background: 'var(--bg-card)' }}>
+                <ActionButton
+                  label="Aufgabe bearbeiten"
+                  onClick={handleBearbeitenOeffnen}
+                  icon={
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  }
+                />
+                <ActionButton
+                  label="Bearbeiter zuweisen"
+                  onClick={handleZuweisenOeffnen}
+                  icon={
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="8.5" cy="7" r="4" />
+                      <line x1="20" y1="8" x2="20" y2="14" />
+                      <line x1="23" y1="11" x2="17" y2="11" />
+                    </svg>
+                  }
+                />
+                {!abgeschlossen && (
+                  <ActionButton
+                    label="Abschließen"
+                    onClick={handleAbschliessen}
+                    icon={
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    }
+                  />
+                )}
+              </div>
             </div>
-            <div className="p-4 space-y-2" style={{ background: 'var(--bg-card)' }}>
-              <ActionButton
-                label="Aufgabe bearbeiten"
-                icon={
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                }
-              />
-              <ActionButton
-                label="Bearbeiter zuweisen"
-                icon={
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="8.5" cy="7" r="4" />
-                    <line x1="20" y1="8" x2="20" y2="14" />
-                    <line x1="23" y1="11" x2="17" y2="11" />
-                  </svg>
-                }
-              />
-              <ActionButton
-                label="Abschließen"
-                icon={
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                }
-              />
-            </div>
-          </div>
 
-          {/* Hinweis Link */}
-          {aufgabe?.hinweisId && (
+            {/* Hinweis Link */}
             <div
               className="rounded-lg overflow-hidden"
               style={{ border: '1px solid var(--border)' }}
@@ -370,13 +677,13 @@ export default function AufgabeDetailPage() {
                     <line x1="16" y1="17" x2="8" y2="17" />
                     <polyline points="10 9 9 9 8 9" />
                   </svg>
-                  {aufgabe.hinweisAktenzeichen ?? `Hinweis #${aufgabe.hinweisId}`}
+                  {aufgabe.aktenzeichen ?? `Hinweis #${aufgabe.hinweisId}`}
                 </Link>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -410,19 +717,19 @@ function DetailRow({
 }
 
 function WorkflowStep({
-  schritt,
-  index,
+  name,
+  nummer,
+  isComplete,
   isActive,
 }: {
-  schritt: WorkflowSchritt;
-  index: number;
+  name: string;
+  nummer: number;
+  isComplete: boolean;
   isActive: boolean;
 }) {
-  const isComplete = schritt.status === 'Abgeschlossen';
-
   return (
     <div
-      className="flex items-start gap-3 px-4 py-3"
+      className="flex items-center gap-3 px-4 py-3"
       style={{
         background: isActive ? '#f0f5ff' : 'transparent',
       }}
@@ -453,30 +760,23 @@ function WorkflowStep({
             <polyline points="20 6 9 17 4 12" />
           </svg>
         ) : (
-          index + 1
+          nummer
         )}
       </div>
 
       {/* Step info */}
-      <div className="min-w-0 flex-1">
-        <p
-          className="text-sm font-medium"
-          style={{ color: isActive ? '#3d5a80' : 'var(--text)' }}
-        >
-          {schritt.name}
-        </p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <StatusBadge status={schritt.status} />
-          {schritt.faelligBis && (
-            <span
-              className="text-xs"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              bis {formatDate(schritt.faelligBis)}
-            </span>
-          )}
-        </div>
-      </div>
+      <p
+        className="text-sm font-medium min-w-0 flex-1"
+        style={{
+          color: isActive
+            ? '#3d5a80'
+            : isComplete
+              ? 'var(--text)'
+              : 'var(--text-muted)',
+        }}
+      >
+        {name}
+      </p>
     </div>
   );
 }

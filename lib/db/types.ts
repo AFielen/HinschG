@@ -10,6 +10,7 @@ import type {
   emailVorlagen,
   emails,
   nachrichten,
+  anhaenge,
   loeschprotokoll,
   systemProtokoll,
 } from './schema';
@@ -27,6 +28,7 @@ export type EmailKonto = typeof emailKonten.$inferSelect;
 export type EmailVorlage = typeof emailVorlagen.$inferSelect;
 export type Email = typeof emails.$inferSelect;
 export type Nachricht = typeof nachrichten.$inferSelect;
+export type Anhang = typeof anhaenge.$inferSelect;
 export type LoeschprotokollEintrag = typeof loeschprotokoll.$inferSelect;
 export type SystemProtokollEintrag = typeof systemProtokoll.$inferSelect;
 
@@ -43,5 +45,6 @@ export type NewEmailKonto = typeof emailKonten.$inferInsert;
 export type NewEmailVorlage = typeof emailVorlagen.$inferInsert;
 export type NewEmail = typeof emails.$inferInsert;
 export type NewNachricht = typeof nachrichten.$inferInsert;
+export type NewAnhang = typeof anhaenge.$inferInsert;
 export type NewLoeschprotokollEintrag = typeof loeschprotokoll.$inferInsert;
 export type NewSystemProtokollEintrag = typeof systemProtokoll.$inferInsert;

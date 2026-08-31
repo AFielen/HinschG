@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, asc, eq, isNull } from 'drizzle-orm';
-import { hinweise, nachrichten } from '@/lib/db/schema';
+import { hinweise, nachrichten, anhaenge } from '@/lib/db/schema';
 import { withTenant } from '@/lib/db/tenant';
 import { requirePostfach } from '@/lib/auth/middleware';
 
@@ -53,7 +53,18 @@ export async function GET(request: NextRequest) {
         .where(eq(nachrichten.hinweisId, hinweisId))
         .orderBy(asc(nachrichten.createdAt), asc(nachrichten.id));
 
-      return { ...hinweis, nachrichten: thread };
+      const anhangListe = await tx
+        .select({
+          id: anhaenge.id,
+          dateiname: anhaenge.dateiname,
+          groesse: anhaenge.groesse,
+          createdAt: anhaenge.createdAt,
+        })
+        .from(anhaenge)
+        .where(eq(anhaenge.hinweisId, hinweisId))
+        .orderBy(asc(anhaenge.createdAt), asc(anhaenge.id));
+
+      return { ...hinweis, nachrichten: thread, anhaenge: anhangListe };
     });
 
     if (!result) {

@@ -10,6 +10,9 @@ services:
       MAILJET_SECRET_KEY: ${MAILJET_SECRET_KEY}
       MAIL_FROM: ${MAIL_FROM}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -45,5 +48,6 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   caddy_data:
   caddy_config:

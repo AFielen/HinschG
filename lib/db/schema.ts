@@ -350,6 +350,29 @@ export const nachrichten = pgTable(
   (table) => [index('nachrichten_hinweis_id_idx').on(table.hinweisId)],
 );
 
+// ── Anhänge (Datei-Uploads zu Hinweisen) ───────────────────────────────────
+
+export const anhaenge = pgTable(
+  'anhaenge',
+  {
+    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    hinweisId: integer('hinweis_id')
+      .references(() => hinweise.id)
+      .notNull(),
+    nachrichtId: integer('nachricht_id').references(() => nachrichten.id),
+    dateiname: text('dateiname').notNull(),
+    mimeTyp: text('mime_typ').notNull(),
+    groesse: integer('groesse').notNull(),
+    // Dateiname auf der Platte (UUID + Endung), niemals der Original-Name
+    speicherName: text('speicher_name').unique().notNull(),
+    hochgeladenVon: text('hochgeladen_von').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index('anhaenge_hinweis_id_idx').on(table.hinweisId)],
+);
+
 // ── Löschprotokoll (§ 11 Abs. 5 HinSchG – KEIN Fallinhalt) ─────────────────
 
 export const loeschprotokoll = pgTable('loeschprotokoll', {
@@ -409,6 +432,14 @@ export const hinweiseRelations = relations(hinweise, ({ one, many }) => ({
   archivEintraege: many(archiv),
   emails: many(emails),
   nachrichten: many(nachrichten),
+  anhaenge: many(anhaenge),
+}));
+
+export const anhaengeRelations = relations(anhaenge, ({ one }) => ({
+  hinweis: one(hinweise, {
+    fields: [anhaenge.hinweisId],
+    references: [hinweise.id],
+  }),
 }));
 
 export const nachrichtenRelations = relations(nachrichten, ({ one }) => ({
