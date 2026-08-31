@@ -6,6 +6,10 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `AUDIT.md` — vollständiger Audit-Bericht (Bestandsaufnahme, HinSchG-/DSGVO-/Sicherheits-Befunde, Roadmap in 4 Phasen)
+
 ## [1.0.0] – 2026-03-18
 
 ### Added
