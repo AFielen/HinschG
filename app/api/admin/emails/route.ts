@@ -66,7 +66,8 @@ export async function GET(request: NextRequest) {
 }
 
 const createSchema = z.object({
-  kontoId: z.number({ coerce: true }),
+  // Ohne kontoId läuft der Versand über MAIL_FROM (Mailjet-Queue in lib/jobs.ts)
+  kontoId: z.number({ coerce: true }).optional(),
   an: z.string().email('Ungültige E-Mail-Adresse'),
   betreff: z.string().min(1, 'Betreff ist erforderlich'),
   inhalt: z.string().min(1, 'Inhalt ist erforderlich'),
@@ -79,22 +80,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = createSchema.parse(body);
 
-    const [konto] = await db
-      .select({ email: emailKonten.email })
-      .from(emailKonten)
-      .where(eq(emailKonten.id, data.kontoId))
-      .limit(1);
+    let vonAdresse = process.env.MAIL_FROM || 'meldestelle@drk-aachen.de';
+    if (data.kontoId !== undefined) {
+      const [konto] = await db
+        .select({ email: emailKonten.email })
+        .from(emailKonten)
+        .where(eq(emailKonten.id, data.kontoId))
+        .limit(1);
 
-    if (!konto) {
-      return NextResponse.json({ error: 'E-Mail-Konto nicht gefunden' }, { status: 404 });
+      if (!konto) {
+        return NextResponse.json({ error: 'E-Mail-Konto nicht gefunden' }, { status: 404 });
+      }
+      vonAdresse = konto.email ?? vonAdresse;
     }
 
     const [email] = await db
       .insert(emails)
       .values({
-        kontoId: data.kontoId,
+        kontoId: data.kontoId ?? null,
         richtung: 'Ausgang',
-        von: konto.email,
+        von: vonAdresse,
         an: data.an,
         betreff: data.betreff,
         inhalt: data.inhalt,

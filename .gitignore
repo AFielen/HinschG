@@ -11,6 +11,9 @@ out/
 build/
 dist/
 
+# Datei-Anhänge (UPLOAD_DIR, Default ./uploads)
+uploads/
+
 # Misc
 .DS_Store
 *.pem

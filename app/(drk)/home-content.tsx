@@ -1,13 +1,11 @@
-import type { Metadata } from 'next';
+'use client';
+
 import Link from 'next/link';
+import { useT } from '@/components/LocaleProvider';
 
-export const metadata: Metadata = {
-  title: 'Startseite – DRK Hinweisgebersystem',
-  description:
-    'Digitale Meldestelle nach dem Hinweisgeberschutzgesetz (HinSchG) – vertraulich oder anonym Hinweise auf Rechtsverstöße melden.',
-};
+export default function HomeContent() {
+  const t = useT();
 
-export default function Home() {
   return (
     <div className="min-h-[calc(100vh-theme(spacing.16))] py-8 px-4" style={{ background: 'var(--bg)' }}>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -31,26 +29,21 @@ export default function Home() {
             </div>
             <div>
               <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
-                Hinweisgebersystem
+                {t('home.heroTitle')}
               </h2>
-              <p style={{ color: 'var(--text-light)' }}>
-                Die digitale Meldestelle des DRK Kreisverband StädteRegion Aachen e.V. nach dem
-                Hinweisgeberschutzgesetz (HinSchG). Hier können Sie Hinweise auf Rechts- und
-                Regelverstöße vertraulich oder anonym abgeben – für den Kreisverband und die
-                angeschlossenen Organisationen.
-              </p>
+              <p style={{ color: 'var(--text-light)' }}>{t('home.heroText')}</p>
             </div>
           </div>
           <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <Link href="/meldestelle" className="drk-btn-primary inline-block">
-              Zur Meldestelle
+              {t('home.toMeldestelle')}
             </Link>
             <Link
               href="/login"
               className="text-sm font-semibold hover:underline"
               style={{ color: 'var(--drk)' }}
             >
-              Anmeldung für Meldestellen-Bearbeiter →
+              {t('home.loginLink')}
             </Link>
           </div>
         </div>
@@ -78,11 +71,10 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>
-              Vertraulich melden
+              {t('home.card1.title')}
             </h3>
             <p className="text-sm" style={{ color: 'var(--text-light)' }}>
-              Ihre Identität wird streng vertraulich behandelt und ist nur den befugten
-              Bearbeitern der Meldestelle bekannt. Rückfragen und Rückmeldungen sind möglich.
+              {t('home.card1.text')}
             </p>
           </div>
 
@@ -109,11 +101,10 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>
-              Anonym melden
+              {t('home.card2.title')}
             </h3>
             <p className="text-sm" style={{ color: 'var(--text-light)' }}>
-              Auf Wunsch melden Sie ganz ohne Angabe persönlicher Daten. Ihre Identität bleibt
-              dann auch der Meldestelle vollständig unbekannt.
+              {t('home.card2.text')}
             </p>
           </div>
 
@@ -138,11 +129,10 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="font-bold mb-2" style={{ color: 'var(--text)' }}>
-              Gesetzlicher Schutz
+              {t('home.card3.title')}
             </h3>
             <p className="text-sm" style={{ color: 'var(--text-light)' }}>
-              Das Hinweisgeberschutzgesetz schützt Sie vor Repressalien wie Kündigung oder
-              Benachteiligung, wenn Sie in gutem Glauben einen Verstoß melden.
+              {t('home.card3.text')}
             </p>
           </div>
         </div>

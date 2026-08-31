@@ -305,7 +305,7 @@ export default function AufgabeDetailPage() {
                 <Link
                   href={`/admin/hinweise/${aufgabe.hinweisId}`}
                   className="underline"
-                  style={{ color: '#3d5a80' }}
+                  style={{ color: 'var(--admin-accent)' }}
                 >
                   {aufgabe.aktenzeichen}
                 </Link>
@@ -332,7 +332,7 @@ export default function AufgabeDetailPage() {
         <Link
           href="/admin/aufgaben"
           className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90"
-          style={{ background: '#3d5a80', minHeight: '44px' }}
+          style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
         >
           Zur Übersicht
         </Link>
@@ -436,7 +436,7 @@ export default function AufgabeDetailPage() {
                       onClick={handleBearbeitenSpeichern}
                       disabled={aktion}
                       className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                      style={{ background: '#3d5a80', minHeight: '44px' }}
+                      style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
                     >
                       {aktion ? 'Speichert...' : 'Speichern'}
                     </button>
@@ -483,7 +483,7 @@ export default function AufgabeDetailPage() {
                       onClick={handleZuweisenSpeichern}
                       disabled={aktion}
                       className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                      style={{ background: '#3d5a80', minHeight: '44px' }}
+                      style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
                     >
                       {aktion ? 'Speichert...' : 'Zuweisen'}
                     </button>
@@ -550,7 +550,7 @@ export default function AufgabeDetailPage() {
             >
               <div
                 className="px-4 py-3 text-sm font-semibold"
-                style={{ background: '#3d5a80', color: '#ffffff' }}
+                style={{ background: 'var(--admin-accent)', color: '#ffffff' }}
               >
                 Workflow-Schritte
               </div>
@@ -576,7 +576,7 @@ export default function AufgabeDetailPage() {
             >
               <div
                 className="px-4 py-3 text-sm font-semibold"
-                style={{ background: '#3d5a80', color: '#ffffff' }}
+                style={{ background: 'var(--admin-accent)', color: '#ffffff' }}
               >
                 Aktionen
               </div>
@@ -651,7 +651,7 @@ export default function AufgabeDetailPage() {
             >
               <div
                 className="px-4 py-3 text-sm font-semibold"
-                style={{ background: '#3d5a80', color: '#ffffff' }}
+                style={{ background: 'var(--admin-accent)', color: '#ffffff' }}
               >
                 Zugehöriger Hinweis
               </div>
@@ -659,7 +659,7 @@ export default function AufgabeDetailPage() {
                 <Link
                   href={`/admin/hinweise/${aufgabe.hinweisId}`}
                   className="inline-flex items-center gap-2 text-sm font-medium underline"
-                  style={{ color: '#3d5a80' }}
+                  style={{ color: 'var(--admin-accent)' }}
                 >
                   <svg
                     width="14"
@@ -738,7 +738,7 @@ function WorkflowStep({
       <div
         className="flex items-center justify-center w-7 h-7 rounded-full shrink-0 text-xs font-bold"
         style={{
-          background: isComplete ? '#059669' : isActive ? '#3d5a80' : 'var(--bg)',
+          background: isComplete ? '#059669' : isActive ? 'var(--admin-accent)' : 'var(--bg)',
           color: isComplete || isActive ? '#ffffff' : 'var(--text-muted)',
           border:
             !isComplete && !isActive
@@ -769,7 +769,7 @@ function WorkflowStep({
         className="text-sm font-medium min-w-0 flex-1"
         style={{
           color: isActive
-            ? '#3d5a80'
+            ? 'var(--admin-accent)'
             : isComplete
               ? 'var(--text)'
               : 'var(--text-muted)',

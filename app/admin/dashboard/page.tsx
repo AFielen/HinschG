@@ -326,7 +326,7 @@ export default function DashboardPage() {
         <Link
           href="/admin/hinweise/neu"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors self-start"
-          style={{ background: '#3d5a80', minHeight: '44px' }}
+          style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
         >
           <svg
             width="16"
@@ -362,10 +362,10 @@ export default function DashboardPage() {
             onClick={() => setMainTab(tab.key)}
             className="px-4 py-2.5 text-sm font-semibold transition-colors rounded-t-lg"
             style={{
-              color: mainTab === tab.key ? '#3d5a80' : 'var(--text-light)',
+              color: mainTab === tab.key ? 'var(--admin-accent)' : 'var(--text-light)',
               borderBottom:
                 mainTab === tab.key
-                  ? '2px solid #3d5a80'
+                  ? '2px solid var(--admin-accent)'
                   : '2px solid transparent',
               marginBottom: '-2px',
             }}
@@ -402,7 +402,7 @@ export default function DashboardPage() {
             <KpiCard
               label="Ø Bearbeitungszeit"
               value={`${stats.avgBearbeitungszeit} Tage`}
-              color="#3d5a80"
+              color="var(--admin-accent)"
               icon={
                 <svg
                   width="24"
@@ -479,7 +479,7 @@ export default function DashboardPage() {
                     className="w-full rounded-t transition-all"
                     style={{
                       height: `${Math.max(4, (balken.value / maxBar) * 100)}%`,
-                      background: '#3d5a80',
+                      background: 'var(--admin-accent)',
                       minHeight: '4px',
                     }}
                   />
@@ -515,10 +515,10 @@ export default function DashboardPage() {
                   className="px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap"
                   style={{
                     color:
-                      taskTab === tab.key ? '#3d5a80' : 'var(--text-muted)',
+                      taskTab === tab.key ? 'var(--admin-accent)' : 'var(--text-muted)',
                     borderBottom:
                       taskTab === tab.key
-                        ? '2px solid #3d5a80'
+                        ? '2px solid var(--admin-accent)'
                         : '2px solid transparent',
                     marginBottom: '-1px',
                   }}
@@ -556,7 +556,7 @@ export default function DashboardPage() {
                 className="px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{
                   background:
-                    hinweisFilter === f ? '#3d5a80' : 'var(--bg-secondary)',
+                    hinweisFilter === f ? 'var(--admin-accent)' : 'var(--bg-secondary)',
                   color:
                     hinweisFilter === f ? '#ffffff' : 'var(--text-light)',
                 }}
@@ -668,7 +668,7 @@ function FristenGruppe({
                 <Link
                   href={`/admin/hinweise/${e.hinweisId}`}
                   className={`underline truncate ${ueberfaellig ? 'font-semibold' : ''}`}
-                  style={{ color: ueberfaellig ? '#dc2626' : '#3d5a80' }}
+                  style={{ color: ueberfaellig ? '#dc2626' : 'var(--admin-accent)' }}
                 >
                   {e.aktenzeichen}
                 </Link>

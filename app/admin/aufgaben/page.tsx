@@ -257,10 +257,10 @@ export default function AufgabenPage() {
             }}
             className="px-4 py-2.5 text-sm font-semibold transition-colors rounded-t-lg whitespace-nowrap"
             style={{
-              color: tab === t.key ? '#3d5a80' : 'var(--text-light)',
+              color: tab === t.key ? 'var(--admin-accent)' : 'var(--text-light)',
               borderBottom:
                 tab === t.key
-                  ? '2px solid #3d5a80'
+                  ? '2px solid var(--admin-accent)'
                   : '2px solid transparent',
               marginBottom: '-2px',
             }}

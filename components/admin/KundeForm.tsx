@@ -390,7 +390,7 @@ export default function KundeForm({ mode, kundeId, initialData, initialMitarbeit
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-1" style={{ color: '#3d5a80' }}>
+          <div className="shrink-0 mt-1" style={{ color: 'var(--admin-accent)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
@@ -419,7 +419,7 @@ export default function KundeForm({ mode, kundeId, initialData, initialMitarbeit
             onClick={handleSave}
             disabled={saving}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ background: '#3d5a80', color: '#fff', minHeight: '44px' }}
+            style={{ background: 'var(--admin-accent)', color: '#fff', minHeight: '44px' }}
           >
             {saving ? 'Speichert...' : 'Kunde speichern'}
           </button>
@@ -632,7 +632,7 @@ export default function KundeForm({ mode, kundeId, initialData, initialMitarbeit
                         checked={maForm.istMeldestelle}
                         onChange={(e) => setMaForm((p) => ({ ...p, istMeldestelle: e.target.checked }))}
                         className="w-4 h-4 rounded"
-                        style={{ accentColor: '#3d5a80' }}
+                        style={{ accentColor: 'var(--admin-accent)' }}
                       />
                       Meldestelle
                     </label>
@@ -642,7 +642,7 @@ export default function KundeForm({ mode, kundeId, initialData, initialMitarbeit
                         checked={maForm.istGeschaeftsfuehrer}
                         onChange={(e) => setMaForm((p) => ({ ...p, istGeschaeftsfuehrer: e.target.checked }))}
                         className="w-4 h-4 rounded"
-                        style={{ accentColor: '#3d5a80' }}
+                        style={{ accentColor: 'var(--admin-accent)' }}
                       />
                       Geschäftsführer
                     </label>

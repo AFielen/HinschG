@@ -161,7 +161,7 @@ export default function KundenOverviewPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-1" style={{ color: '#3d5a80' }}>
+          <div className="shrink-0 mt-1" style={{ color: 'var(--admin-accent)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
@@ -179,7 +179,7 @@ export default function KundenOverviewPage() {
         <Link
           href="/admin/kunden/neu"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 shrink-0"
-          style={{ background: '#3d5a80', minHeight: '44px' }}
+          style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />

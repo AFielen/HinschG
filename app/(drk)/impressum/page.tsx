@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import LegalLanguageNotice from '@/components/LegalLanguageNotice';
 
 export const metadata: Metadata = {
   title: 'Impressum – DRK Hinweisgebersystem',
@@ -11,6 +12,7 @@ export default function Impressum() {
     <div style={{ background: 'var(--bg)' }} className="min-h-[calc(100vh-theme(spacing.16))] py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="drk-card">
+          <LegalLanguageNotice />
           <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>Impressum</h2>
 
           <div className="space-y-6" style={{ color: 'var(--text-light)' }}>

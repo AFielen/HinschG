@@ -438,3 +438,13 @@ DRK Kreisverband StädteRegion Aachen e.V.
 Henry-Dunant-Platz 1, 52146 Würselen
 E-Mail: Info@DRK-Aachen.de
 Web: https://www.drk-aachen.de
+
+---
+
+## Projektspezifische Abweichungen vom Template
+
+Dieses Projekt (Hinweisgebersystem nach HinSchG) weicht in folgenden Punkten bewusst von den Template-Konventionen ab:
+
+1. **Cookies:** Die Session-Cookies `hinweis-session` (Admin-Login) und `postfach-session` (anonymes Postfach) sind technisch notwendig für die Authentifizierung — Abweichung von „Keine Cookies". Beide sind httpOnly, es gibt keine Tracking- oder Komfort-Cookies. In `/datenschutz` dokumentiert.
+2. **Datenbank:** PostgreSQL ist erforderlich (Fallakten, Fristen, Dokumentationspflicht nach § 11 HinSchG) — Abweichung von „Keine Datenbank wo vermeidbar". Betrieb gemäß INFRASTRUCTURE.md-Goldstandard (Self-Hosted auf Hetzner, RLS-Mandantentrennung, PII-Verschlüsselung).
+3. **Zweisprachigkeit:** Nur die öffentlichen Seiten sind DE/EN; der Admin-Bereich ist bewusst nur Deutsch (interne Bearbeiter-Zielgruppe).

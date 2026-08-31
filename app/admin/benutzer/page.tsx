@@ -366,7 +366,7 @@ export default function BenutzerPage() {
                 setResetTarget(row);
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90"
-              style={{ background: '#3d5a80', color: '#fff' }}
+              style={{ background: 'var(--admin-accent)', color: '#fff' }}
             >
               Passwort zurücksetzen
             </button>
@@ -404,7 +404,7 @@ export default function BenutzerPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-1" style={{ color: '#3d5a80' }}>
+          <div className="shrink-0 mt-1" style={{ color: 'var(--admin-accent)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="9" cy="7" r="4" />
               <path d="M2 21v-2a4 4 0 0 1 4-4h6" />

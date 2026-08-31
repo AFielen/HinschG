@@ -162,7 +162,7 @@ export default function DataTable<T extends { id: number }>({
                   onDoubleClick={() => onRowDoubleClick?.(row)}
                   className="transition-colors cursor-pointer"
                   style={{
-                    background: row.id === selectedId ? '#e8f0fe' : idx % 2 === 0 ? '#ffffff' : '#f9fafb',
+                    background: row.id === selectedId ? 'var(--admin-selected)' : idx % 2 === 0 ? 'var(--bg-card)' : 'var(--bg)',
                     borderBottom: '1px solid var(--border)',
                   }}
                 >

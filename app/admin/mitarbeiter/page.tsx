@@ -289,7 +289,7 @@ export default function MitarbeiterOverviewPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-1" style={{ color: '#3d5a80' }}>
+          <div className="shrink-0 mt-1" style={{ color: 'var(--admin-accent)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
@@ -430,7 +430,7 @@ export default function MitarbeiterOverviewPage() {
                       checked={form.istMeldestelle}
                       onChange={(e) => setForm((p) => ({ ...p, istMeldestelle: e.target.checked }))}
                       className="w-4 h-4 rounded"
-                      style={{ accentColor: '#3d5a80' }}
+                      style={{ accentColor: 'var(--admin-accent)' }}
                     />
                     Meldestelle
                   </label>
@@ -440,7 +440,7 @@ export default function MitarbeiterOverviewPage() {
                       checked={form.istGeschaeftsfuehrer}
                       onChange={(e) => setForm((p) => ({ ...p, istGeschaeftsfuehrer: e.target.checked }))}
                       className="w-4 h-4 rounded"
-                      style={{ accentColor: '#3d5a80' }}
+                      style={{ accentColor: 'var(--admin-accent)' }}
                     />
                     Geschäftsführer
                   </label>

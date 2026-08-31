@@ -312,7 +312,7 @@ export default function HinweisForm({
       <div className="max-w-2xl space-y-6">
         <div
           className="rounded-lg px-5 py-4"
-          style={{ background: '#d1fae5', border: '1px solid #6ee7b7', color: '#065f46' }}
+          style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success-text)' }}
         >
           <h1 className="text-lg font-bold mb-1">Hinweis erfolgreich erfasst</h1>
           <p className="text-sm">
@@ -322,14 +322,14 @@ export default function HinweisForm({
 
         <div
           className="rounded-lg px-5 py-4"
-          style={{ background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e' }}
+          style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning-text)' }}
         >
           <h2 className="text-sm font-bold uppercase tracking-wide mb-2">
             Zugangscode für den Hinweisgeber
           </h2>
           <div
             className="font-mono text-2xl font-bold tracking-widest mb-3 select-all"
-            style={{ color: '#78350f' }}
+            style={{ color: 'var(--warning-text)' }}
           >
             {erfolg.zugangscode}
           </div>
@@ -346,7 +346,7 @@ export default function HinweisForm({
             <Link
               href={`/admin/hinweise/${erfolg.hinweisId}`}
               className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90"
-              style={{ background: '#3d5a80', minHeight: '44px' }}
+              style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
             >
               Zum Hinweis
             </Link>
@@ -375,7 +375,7 @@ export default function HinweisForm({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="shrink-0 mt-1" style={{ color: '#3d5a80' }}>
+          <div className="shrink-0 mt-1" style={{ color: 'var(--admin-accent)' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               <path d="M9 12l2 2 4-4" />
@@ -406,7 +406,7 @@ export default function HinweisForm({
             onClick={handleSave}
             disabled={saving}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ background: '#3d5a80', color: '#fff', minHeight: '44px' }}
+            style={{ background: 'var(--admin-accent)', color: '#fff', minHeight: '44px' }}
           >
             {saving ? 'Speichert...' : 'Hinweis speichern'}
           </button>
@@ -425,7 +425,7 @@ export default function HinweisForm({
       {gespeichert && (
         <div
           className="rounded-lg px-4 py-3 text-sm"
-          style={{ background: '#d1fae5', border: '1px solid #6ee7b7', color: '#065f46' }}
+          style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success-text)' }}
         >
           Änderungen gespeichert.
         </div>
@@ -446,7 +446,7 @@ export default function HinweisForm({
                   name="istAnonym"
                   checked={form.istAnonym}
                   onChange={() => update('istAnonym', true)}
-                  style={{ accentColor: '#3d5a80' }}
+                  style={{ accentColor: 'var(--admin-accent)' }}
                 />
                 Ja
               </label>
@@ -456,7 +456,7 @@ export default function HinweisForm({
                   name="istAnonym"
                   checked={!form.istAnonym}
                   onChange={() => update('istAnonym', false)}
-                  style={{ accentColor: '#3d5a80' }}
+                  style={{ accentColor: 'var(--admin-accent)' }}
                 />
                 Nein
               </label>
@@ -486,7 +486,7 @@ export default function HinweisForm({
               className="drk-input"
               value={mode === 'create' ? 'wird automatisch vergeben' : form.aktenzeichen}
               readOnly
-              style={{ background: '#f3f4f6', cursor: 'not-allowed' }}
+              style={{ background: 'var(--bg-secondary)', cursor: 'not-allowed' }}
             />
           </div>
           {mode === 'edit' && (
@@ -788,14 +788,14 @@ function KommunikationSection({
                   <div
                     className="max-w-[85%] rounded-lg px-3.5 py-2.5"
                     style={{
-                      background: vonHinweisgeber ? 'var(--bg-secondary)' : '#e8f0fe',
+                      background: vonHinweisgeber ? 'var(--bg-secondary)' : 'var(--admin-selected)',
                       border: '1px solid var(--border)',
                     }}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="text-xs font-semibold"
-                        style={{ color: vonHinweisgeber ? 'var(--text)' : '#3d5a80' }}
+                        style={{ color: vonHinweisgeber ? 'var(--text)' : 'var(--admin-accent)' }}
                       >
                         {vonHinweisgeber ? 'Hinweisgeber' : `Meldestelle (${n.ersteller})`}
                       </span>
@@ -839,7 +839,7 @@ function KommunikationSection({
               type="checkbox"
               checked={alsRueckmeldung}
               onChange={(e) => setAlsRueckmeldung(e.target.checked)}
-              style={{ accentColor: '#3d5a80' }}
+              style={{ accentColor: 'var(--admin-accent)' }}
             />
             Als Rückmeldung nach § 17 Abs. 2 markieren
           </label>
@@ -849,7 +849,7 @@ function KommunikationSection({
               onClick={handleSenden}
               disabled={senden || !inhalt.trim()}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ background: '#3d5a80', minHeight: '44px' }}
+              style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
             >
               {senden ? 'Sendet...' : 'Nachricht senden'}
             </button>
@@ -936,7 +936,7 @@ function AnhaengeSection({
                   <a
                     href={`/api/admin/anhaenge/${a.id}`}
                     className="text-sm font-medium underline break-all"
-                    style={{ color: '#3d5a80' }}
+                    style={{ color: 'var(--admin-accent)' }}
                   >
                     {a.dateiname}
                   </a>
@@ -991,7 +991,7 @@ function AnhaengeSection({
               onClick={handleUpload}
               disabled={!datei || hochladen}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
-              style={{ background: '#3d5a80', minHeight: '44px' }}
+              style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
             >
               {hochladen ? 'Lädt hoch...' : 'Hochladen'}
             </button>

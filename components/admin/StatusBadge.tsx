@@ -1,10 +1,10 @@
 type Variant = 'neu' | 'bearbeitung' | 'abgeschlossen' | 'offen';
 
 const STYLES: Record<Variant, { bg: string; color: string }> = {
-  neu: { bg: '#dbeafe', color: '#1e40af' },
-  bearbeitung: { bg: '#fef3c7', color: '#92400e' },
-  abgeschlossen: { bg: '#d1fae5', color: '#065f46' },
-  offen: { bg: '#dbeafe', color: '#1e40af' },
+  neu: { bg: 'var(--info-bg)', color: 'var(--info-text)' },
+  bearbeitung: { bg: 'var(--warning-bg)', color: 'var(--warning-text)' },
+  abgeschlossen: { bg: 'var(--success-bg)', color: 'var(--success-text)' },
+  offen: { bg: 'var(--info-bg)', color: 'var(--info-text)' },
 };
 
 interface StatusBadgeProps {

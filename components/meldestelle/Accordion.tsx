@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface AccordionItemProps {
-  title: string;
+  title: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
 }
@@ -37,15 +37,15 @@ export function AccordionItem({ title, children, defaultOpen = false }: Accordio
   }, [isOpen]);
 
   return (
-    <div className="border-b" style={{ borderColor: '#e5e7eb' }}>
+    <div className="border-b" style={{ borderColor: 'var(--border)' }}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between py-4 px-1 text-left font-semibold text-[0.95rem] transition-colors"
-        style={{ color: '#212529', minHeight: '44px' }}
+        style={{ color: 'var(--meldestelle-text)', minHeight: '44px' }}
         aria-expanded={isOpen}
       >
-        <span>{title}</span>
+        <span className="flex items-center gap-2">{title}</span>
         <svg
           width="20"
           height="20"
@@ -56,7 +56,7 @@ export function AccordionItem({ title, children, defaultOpen = false }: Accordio
           strokeLinecap="round"
           strokeLinejoin="round"
           className="shrink-0 ml-2 transition-transform duration-200"
-          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', color: '#6b7280' }}
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', color: 'var(--meldestelle-text-muted)' }}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>

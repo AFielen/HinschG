@@ -24,6 +24,22 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 - `lib/kategorien.ts` — zentrale Kategorienliste, serverseitig validiert (public + admin)
 - `GET /api/health` (Status/Version/Timestamp)
 - `GET /api/admin/users?zweck=zuweisung` — Bearbeiter-Auswahl für Zuweisungen (alle eingeloggten Nutzer)
+- **Zweisprachigkeit (DE/EN) der öffentlichen Seiten:** `lib/i18n.ts` komplett neu (typsichere Keys), `LocaleProvider`/`LocaleToggle` (localStorage `drk-locale`), Startseite/Hilfe/Spenden/Meldestelle/Wizards/Postfach übersetzt; Impressum/Datenschutz bleiben Deutsch mit EN-Hinweisbox; Admin bewusst nur Deutsch
+- **Tests + CI:** vitest (devDependency) mit 24 Unit-Tests (`tests/` — crypto, aktenzeichen, fristen, rate-limit, kategorien), Scripts `test`/`typecheck`, GitHub-Actions-Workflow `.github/workflows/ci.yml` (typecheck + test + build)
+- `docs/BETRIEB.md` — Betriebshandbuch (Erst-Setup, Backup nach INFRASTRUCTURE.md, Schlüsselverwaltung, Monitoring, Update-Prozedur)
+- `public/logo.svg`; `components/Footer.tsx` (DRK-Footer als Komponente)
+
+### Fixed
+
+- **Fristberechnung Monatsende:** `berechneFristen`/`berechneLoeschdatum` klemmen auf den Monatsletzten (§ 188 Abs. 3 BGB analog) — vorher zeigte JS-Date-Überlauf eine zu späte Rückmeldefrist an (31.01. + 3 Monate → 01.05. statt 30.04.)
+- `POST /api/admin/emails`: `kontoId` optional — Senden in die Warteschlange funktioniert jetzt ohne hinterlegtes E-Mail-Konto (Absender aus `MAIL_FROM`)
+- Doppelte Header/Footer auf Meldestelle und Admin beseitigt (Route-Group `app/(drk)/` mit eigenem Layout, Root-Layout minimal)
+- Dark Mode der Meldestelle, des Logins und der Admin-Tabellen/Badges repariert (hartkodierte Hex-Werte → CSS-Tokens `--meldestelle-*`, `--admin-*`)
+- Fristen-Erinnerungsjob ignoriert abgeschlossene Hinweise
+
+### Removed
+
+- Emojis in Meldestellen-Accordions und auf der 404-Seite (durch Inline-SVGs ersetzt); Unicode-Pfeile in `Pagination` (SVG-Chevrons); totes `lint`-Script (`next lint` existiert in Next 16 nicht mehr, jetzt `tsc --noEmit`)
 
 ### Changed
 

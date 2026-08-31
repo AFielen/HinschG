@@ -42,7 +42,7 @@ function LoginForm() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #4a7a9b 0%, #3d7099 100%)' }}
+      style={{ background: 'var(--meldestelle-bg-gradient)' }}
     >
       <div
         className="w-full max-w-4xl rounded-2xl overflow-hidden flex flex-col md:flex-row"
@@ -90,7 +90,10 @@ function LoginForm() {
         </div>
 
         {/* Right: Login Form */}
-        <div className="md:w-1/2 bg-white p-8 md:p-12 flex flex-col justify-center">
+        <div
+          className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center"
+          style={{ background: 'var(--bg-card)' }}
+        >
           <h2 className="text-2xl font-bold mb-1" style={{ color: 'var(--text)' }}>
             Anmeldung
           </h2>

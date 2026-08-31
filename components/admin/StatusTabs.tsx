@@ -46,8 +46,8 @@ function TabButton({
       onClick={onClick}
       className="px-4 py-2.5 text-sm font-medium transition-colors relative"
       style={{
-        color: isActive ? '#3d5a80' : 'var(--text-muted)',
-        borderBottom: isActive ? '2px solid #3d5a80' : '2px solid transparent',
+        color: isActive ? 'var(--admin-accent)' : 'var(--text-muted)',
+        borderBottom: isActive ? '2px solid var(--admin-accent)' : '2px solid transparent',
         marginBottom: '-1px',
       }}
     >
@@ -56,7 +56,7 @@ function TabButton({
         <span
           className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full"
           style={{
-            background: isActive ? '#3d5a80' : 'var(--bg-secondary)',
+            background: isActive ? 'var(--admin-accent)' : 'var(--bg-secondary)',
             color: isActive ? '#fff' : 'var(--text-muted)',
           }}
         >

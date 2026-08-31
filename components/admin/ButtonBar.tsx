@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 interface ButtonDef {
   label: string;
   icon?: React.ReactNode;
@@ -20,16 +22,16 @@ export default function ButtonBar({ buttons }: ButtonBarProps) {
         const isDanger = btn.variant === 'danger';
         const style: React.CSSProperties = isDanger
           ? { background: '#dc2626', color: '#fff' }
-          : { background: '#3d5a80', color: '#fff' };
+          : { background: 'var(--admin-accent)', color: '#fff' };
 
         const className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed';
 
         if (btn.href) {
           return (
-            <a key={btn.label} href={btn.href} className={className} style={style}>
+            <Link key={btn.label} href={btn.href} className={className} style={style}>
               {btn.icon}
               {btn.label}
-            </a>
+            </Link>
           );
         }
 

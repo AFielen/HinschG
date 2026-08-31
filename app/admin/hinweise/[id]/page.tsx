@@ -101,7 +101,7 @@ export default function HinweisEditPage({ params }: { params: Promise<{ id: stri
         <Link
           href="/admin/hinweise"
           className="inline-flex items-center px-4 py-2.5 rounded-lg font-semibold text-sm text-white transition-opacity hover:opacity-90"
-          style={{ background: '#3d5a80', minHeight: '44px' }}
+          style={{ background: 'var(--admin-accent)', minHeight: '44px' }}
         >
           Zur Übersicht
         </Link>

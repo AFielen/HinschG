@@ -123,7 +123,7 @@ export default function KundeEditPage({ params }: { params: Promise<{ id: string
         <Link
           href="/admin/kunden"
           className="inline-flex items-center gap-1.5 text-sm font-medium"
-          style={{ color: '#3d5a80' }}
+          style={{ color: 'var(--admin-accent)' }}
         >
           Zurück zur Kundenübersicht
         </Link>

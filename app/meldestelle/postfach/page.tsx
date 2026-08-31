@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useLocale, useT } from '@/components/LocaleProvider';
+import type { Locale, TranslationKey } from '@/lib/i18n';
 
 interface Nachricht {
   id: number;
@@ -41,33 +43,37 @@ const ERLAUBTE_DATEITYPEN = [
 ];
 const ANHANG_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.txt,.docx,.xlsx';
 
-const STATUS_LABEL: Record<PostfachDaten['status'], string> = {
-  Neu: 'Neu',
-  InBearbeitung: 'In Bearbeitung',
-  Abgeschlossen: 'Abgeschlossen',
+const STATUS_KEY: Record<PostfachDaten['status'], TranslationKey> = {
+  Neu: 'pf.status.neu',
+  InBearbeitung: 'pf.status.inBearbeitung',
+  Abgeschlossen: 'pf.status.abgeschlossen',
 };
 
 const STATUS_FARBEN: Record<
   PostfachDaten['status'],
   { background: string; color: string }
 > = {
-  Neu: { background: '#eff6ff', color: '#1e40af' },
-  InBearbeitung: { background: '#fef3c7', color: '#92400e' },
-  Abgeschlossen: { background: '#d1fae5', color: '#065f46' },
+  Neu: { background: 'var(--info-bg)', color: 'var(--info-text)' },
+  InBearbeitung: { background: 'var(--warning-bg)', color: 'var(--warning-text)' },
+  Abgeschlossen: { background: 'var(--success-bg)', color: 'var(--success-text)' },
 };
 
-function formatDatum(iso: string | null): string {
+function intlLocale(locale: Locale): string {
+  return locale === 'de' ? 'de-DE' : 'en-GB';
+}
+
+function formatDatum(iso: string | null, locale: Locale): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('de-DE', {
+  return new Date(iso).toLocaleDateString(intlLocale(locale), {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
 }
 
-function formatGroesse(bytes: number): string {
+function formatGroesse(bytes: number, locale: Locale): string {
   if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toLocaleString('de-DE', {
+    return `${(bytes / (1024 * 1024)).toLocaleString(intlLocale(locale), {
       maximumFractionDigits: 1,
     })} MB`;
   }
@@ -77,19 +83,20 @@ function formatGroesse(bytes: number): string {
   return `${bytes} B`;
 }
 
-function formatDatumZeit(iso: string): string {
-  return (
-    new Date(iso).toLocaleString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }) + ' Uhr'
-  );
+function formatDatumZeit(iso: string, locale: Locale): string {
+  const text = new Date(iso).toLocaleString(intlLocale(locale), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return locale === 'de' ? `${text} Uhr` : text;
 }
 
 export default function PostfachPage() {
+  const t = useT();
+  const { locale } = useLocale();
   const [laden, setLaden] = useState(true);
   const [daten, setDaten] = useState<PostfachDaten | null>(null);
 
@@ -147,16 +154,14 @@ export default function PostfachPage() {
         const body = await res.json().catch(() => null);
         setLoginFehler(
           body?.error ||
-            (res.status === 429
-              ? 'Zu viele Anmeldeversuche. Bitte versuchen Sie es später erneut.'
-              : 'Aktenzeichen oder Zugangscode ist falsch.'),
+            (res.status === 429 ? t('pf.loginErrorTooMany') : t('pf.loginErrorWrong')),
         );
         return;
       }
       await ladePostfach();
       setZugangscode('');
     } catch {
-      setLoginFehler('Verbindungsfehler. Bitte versuchen Sie es erneut.');
+      setLoginFehler(t('pf.connError'));
     } finally {
       setAnmelden(false);
     }
@@ -177,17 +182,15 @@ export default function PostfachPage() {
         if (res.status === 401) {
           // Sitzung abgelaufen → zurück zur Anmeldung
           setDaten(null);
-          setLoginFehler('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.');
+          setLoginFehler(t('pf.sessionExpired'));
           return;
         }
-        throw new Error(body?.error || 'Fehler beim Senden der Nachricht');
+        throw new Error(body?.error || t('pf.sendError'));
       }
       setAntwort('');
       await ladePostfach();
     } catch (err) {
-      setSendeFehler(
-        err instanceof Error ? err.message : 'Ein unbekannter Fehler ist aufgetreten',
-      );
+      setSendeFehler(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setSenden(false);
     }
@@ -198,15 +201,13 @@ export default function PostfachPage() {
     setUploadFehler('');
     if (gewaehlt) {
       if (gewaehlt.size > MAX_ANHANG_BYTES) {
-        setUploadFehler('Die Datei ist zu groß (maximal 10 MB).');
+        setUploadFehler(t('pf.fileTooBig'));
         setDatei(null);
         e.target.value = '';
         return;
       }
       if (!ERLAUBTE_DATEITYPEN.includes(gewaehlt.type)) {
-        setUploadFehler(
-          'Dieser Dateityp ist nicht erlaubt. Erlaubt sind PDF, JPG, PNG, WebP, TXT, DOCX und XLSX.',
-        );
+        setUploadFehler(t('pf.fileTypeNotAllowed'));
         setDatei(null);
         e.target.value = '';
         return;
@@ -231,18 +232,16 @@ export default function PostfachPage() {
         if (res.status === 401) {
           // Sitzung abgelaufen → zurück zur Anmeldung
           setDaten(null);
-          setLoginFehler('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.');
+          setLoginFehler(t('pf.sessionExpired'));
           return;
         }
-        throw new Error(body?.error || 'Fehler beim Hochladen der Datei');
+        throw new Error(body?.error || t('pf.uploadError'));
       }
       setDatei(null);
       if (dateiInputRef.current) dateiInputRef.current.value = '';
       await ladePostfach();
     } catch (err) {
-      setUploadFehler(
-        err instanceof Error ? err.message : 'Ein unbekannter Fehler ist aufgetreten',
-      );
+      setUploadFehler(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
       setHochladen(false);
     }
@@ -268,10 +267,10 @@ export default function PostfachPage() {
       <div className="max-w-[800px] mx-auto">
         <div
           className="rounded-xl p-6 sm:p-8 text-center"
-          style={{ background: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+          style={{ background: 'var(--meldestelle-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
         >
-          <p className="text-[0.9rem]" style={{ color: '#6b7280' }}>
-            Postfach wird geladen...
+          <p className="text-[0.9rem]" style={{ color: 'var(--meldestelle-text-muted)' }}>
+            {t('pf.loading')}
           </p>
         </div>
       </div>
@@ -284,32 +283,30 @@ export default function PostfachPage() {
       <div className="max-w-[600px] mx-auto space-y-6">
         <div
           className="rounded-xl p-6 sm:p-8"
-          style={{ background: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+          style={{ background: 'var(--meldestelle-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
         >
           <div className="flex items-center gap-3 mb-4">
             <div
               className="flex items-center justify-center w-10 h-10 rounded-lg shrink-0"
-              style={{ background: '#4a7a9b' }}
+              style={{ background: 'var(--meldestelle-accent)' }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="20" height="16" x="2" y="4" rx="2" />
                 <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold" style={{ color: '#212529' }}>
-              Postfach — Status Ihrer Meldung
+            <h1 className="text-xl font-bold" style={{ color: 'var(--meldestelle-text)' }}>
+              {t('pf.loginTitle')}
             </h1>
           </div>
-          <p className="text-[0.9rem] leading-relaxed mb-6" style={{ color: '#4a5568' }}>
-            Melden Sie sich mit Ihrem Aktenzeichen und Ihrem Zugangscode an, um den
-            Bearbeitungsstand Ihrer Meldung einzusehen, Nachrichten der Meldestelle zu
-            lesen und Rückfragen zu beantworten — auch bei anonymen Meldungen.
+          <p className="text-[0.9rem] leading-relaxed mb-6" style={{ color: 'var(--meldestelle-text-body)' }}>
+            {t('pf.loginIntro')}
           </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="drk-label" htmlFor="aktenzeichen">
-                Aktenzeichen *
+                {t('success.aktenzeichen')} *
               </label>
               <input
                 id="aktenzeichen"
@@ -317,14 +314,14 @@ export default function PostfachPage() {
                 className="drk-input font-mono"
                 value={aktenzeichen}
                 onChange={(e) => setAktenzeichen(e.target.value)}
-                placeholder="z.B. 2026-08-31-ABCD2345"
+                placeholder={t('pf.aktenzeichenPh')}
                 autoComplete="off"
                 required
               />
             </div>
             <div>
               <label className="drk-label" htmlFor="zugangscode">
-                Zugangscode *
+                {t('success.zugangscode')} *
               </label>
               <input
                 id="zugangscode"
@@ -341,7 +338,7 @@ export default function PostfachPage() {
             {loginFehler && (
               <div
                 className="rounded-lg p-3 text-sm"
-                style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}
+                style={{ background: 'var(--error-bg)', color: 'var(--error-text)', border: '1px solid var(--error-border)' }}
               >
                 {loginFehler}
               </div>
@@ -349,15 +346,15 @@ export default function PostfachPage() {
 
             <div className="flex items-center justify-between pt-2">
               <Link href="/meldestelle" className="drk-btn-secondary flex items-center gap-2">
-                Zurück
+                {t('common.back')}
               </Link>
               <button
                 type="submit"
                 disabled={anmelden || !aktenzeichen.trim() || !zugangscode.trim()}
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: '#4a7a9b', minHeight: '44px' }}
+                style={{ background: 'var(--meldestelle-accent)', minHeight: '44px' }}
               >
-                {anmelden ? 'Wird geprüft...' : 'Anmelden'}
+                {anmelden ? t('pf.checking') : t('pf.login')}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
@@ -374,9 +371,7 @@ export default function PostfachPage() {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.9)' }}>
-            Aktenzeichen und Zugangscode wurden Ihnen einmalig nach dem Absenden Ihrer
-            Meldung angezeigt. Sie können aus Sicherheitsgründen nicht wiederhergestellt
-            werden.
+            {t('pf.codeHint')}
           </p>
         </div>
       </div>
@@ -389,14 +384,14 @@ export default function PostfachPage() {
       {/* ── Status-Karte ── */}
       <div
         className="rounded-xl p-6 sm:p-8"
-        style={{ background: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+        style={{ background: 'var(--meldestelle-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
       >
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-xl font-bold" style={{ color: '#212529' }}>
-              Ihre Meldung
+            <h1 className="text-xl font-bold" style={{ color: 'var(--meldestelle-text)' }}>
+              {t('pf.yourReport')}
             </h1>
-            <p className="text-[0.95rem] font-bold font-mono mt-1" style={{ color: '#4a7a9b' }}>
+            <p className="text-[0.95rem] font-bold font-mono mt-1" style={{ color: 'var(--meldestelle-accent-text)' }}>
               {daten.aktenzeichen}
             </p>
           </div>
@@ -404,33 +399,33 @@ export default function PostfachPage() {
             className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold"
             style={STATUS_FARBEN[daten.status]}
           >
-            {STATUS_LABEL[daten.status]}
+            {t(STATUS_KEY[daten.status])}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="rounded-lg p-3" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>
-              Eingang
+          <div className="rounded-lg p-3" style={{ background: 'var(--meldestelle-field)', border: '1px solid var(--meldestelle-field-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--meldestelle-text-muted)' }}>
+              {t('pf.received')}
             </p>
-            <p className="text-sm font-semibold mt-1" style={{ color: '#212529' }}>
-              {formatDatum(daten.createdAt)}
-            </p>
-          </div>
-          <div className="rounded-lg p-3" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>
-              Eingangsbestätigung
-            </p>
-            <p className="text-sm font-semibold mt-1" style={{ color: '#212529' }}>
-              {formatDatum(daten.eingangsbestaetigungAm)}
+            <p className="text-sm font-semibold mt-1" style={{ color: 'var(--meldestelle-text)' }}>
+              {formatDatum(daten.createdAt, locale)}
             </p>
           </div>
-          <div className="rounded-lg p-3" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#6b7280' }}>
-              {daten.rueckmeldungAm ? 'Rückmeldung erfolgt' : 'Rückmeldung bis'}
+          <div className="rounded-lg p-3" style={{ background: 'var(--meldestelle-field)', border: '1px solid var(--meldestelle-field-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--meldestelle-text-muted)' }}>
+              {t('pf.confirmation')}
             </p>
-            <p className="text-sm font-semibold mt-1" style={{ color: '#212529' }}>
-              {formatDatum(daten.rueckmeldungAm ?? daten.rueckmeldungFaelligAm)}
+            <p className="text-sm font-semibold mt-1" style={{ color: 'var(--meldestelle-text)' }}>
+              {formatDatum(daten.eingangsbestaetigungAm, locale)}
+            </p>
+          </div>
+          <div className="rounded-lg p-3" style={{ background: 'var(--meldestelle-field)', border: '1px solid var(--meldestelle-field-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--meldestelle-text-muted)' }}>
+              {daten.rueckmeldungAm ? t('pf.feedbackDone') : t('pf.feedbackDue')}
+            </p>
+            <p className="text-sm font-semibold mt-1" style={{ color: 'var(--meldestelle-text)' }}>
+              {formatDatum(daten.rueckmeldungAm ?? daten.rueckmeldungFaelligAm, locale)}
             </p>
           </div>
         </div>
@@ -439,16 +434,16 @@ export default function PostfachPage() {
       {/* ── Nachrichten-Thread ── */}
       <div
         className="rounded-xl p-6 sm:p-8"
-        style={{ background: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+        style={{ background: 'var(--meldestelle-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
       >
-        <h2 className="text-lg font-bold mb-4" style={{ color: '#212529' }}>
-          Nachrichten
+        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--meldestelle-text)' }}>
+          {t('pf.messages')}
         </h2>
 
         <div className="space-y-4">
           {daten.nachrichten.length === 0 && (
-            <p className="text-sm" style={{ color: '#6b7280' }}>
-              Noch keine Nachrichten vorhanden.
+            <p className="text-sm" style={{ color: 'var(--meldestelle-text-muted)' }}>
+              {t('pf.noMessages')}
             </p>
           )}
           {daten.nachrichten.map((nachricht) => {
@@ -462,27 +457,27 @@ export default function PostfachPage() {
                   className="max-w-[85%] rounded-lg p-4"
                   style={
                     vonMeldestelle
-                      ? { background: '#f1f5f9', border: '1px solid #e2e8f0' }
-                      : { background: '#4a7a9b' }
+                      ? { background: 'var(--meldestelle-field)', border: '1px solid var(--meldestelle-field-border)' }
+                      : { background: 'var(--meldestelle-accent)' }
                   }
                 >
                   <p
                     className="text-xs font-semibold mb-1"
-                    style={{ color: vonMeldestelle ? '#4a7a9b' : 'rgba(255,255,255,0.8)' }}
+                    style={{ color: vonMeldestelle ? 'var(--meldestelle-accent-text)' : 'rgba(255,255,255,0.8)' }}
                   >
-                    {vonMeldestelle ? 'Meldestelle' : 'Sie'}
+                    {vonMeldestelle ? t('pf.fromOffice') : t('pf.fromYou')}
                   </p>
                   <p
                     className="text-sm leading-relaxed whitespace-pre-wrap"
-                    style={{ color: vonMeldestelle ? '#212529' : '#ffffff' }}
+                    style={{ color: vonMeldestelle ? 'var(--meldestelle-text)' : '#ffffff' }}
                   >
                     {nachricht.inhalt}
                   </p>
                   <p
                     className="text-xs mt-2"
-                    style={{ color: vonMeldestelle ? '#9ca3af' : 'rgba(255,255,255,0.7)' }}
+                    style={{ color: vonMeldestelle ? 'var(--meldestelle-text-muted)' : 'rgba(255,255,255,0.7)' }}
                   >
-                    {formatDatumZeit(nachricht.createdAt)}
+                    {formatDatumZeit(nachricht.createdAt, locale)}
                   </p>
                 </div>
               </div>
@@ -491,9 +486,9 @@ export default function PostfachPage() {
         </div>
 
         {/* ── Antwort ── */}
-        <div className="pt-6 mt-6 border-t" style={{ borderColor: '#e5e7eb' }}>
+        <div className="pt-6 mt-6 border-t" style={{ borderColor: 'var(--border)' }}>
           <label className="drk-label" htmlFor="antwort">
-            Ihre Nachricht an die Meldestelle
+            {t('pf.replyLabel')}
           </label>
           <textarea
             id="antwort"
@@ -502,17 +497,16 @@ export default function PostfachPage() {
             maxLength={10000}
             value={antwort}
             onChange={(e) => setAntwort(e.target.value)}
-            placeholder="Rückfrage beantworten, Informationen ergänzen oder Unterlagen beschreiben..."
+            placeholder={t('pf.replyPh')}
           />
-          <p className="text-xs mt-2" style={{ color: '#6b7280' }}>
-            Belege und Unterlagen können Sie im Abschnitt „Anhänge“ unterhalb des
-            Nachrichtenverlaufs als Datei nachreichen.
+          <p className="text-xs mt-2" style={{ color: 'var(--meldestelle-text-muted)' }}>
+            {t('pf.replyHint')}
           </p>
 
           {sendeFehler && (
             <div
               className="rounded-lg p-3 text-sm mt-3"
-              style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}
+              style={{ background: 'var(--error-bg)', color: 'var(--error-text)', border: '1px solid var(--error-border)' }}
             >
               {sendeFehler}
             </div>
@@ -529,25 +523,25 @@ export default function PostfachPage() {
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" x2="9" y1="12" y2="12" />
               </svg>
-              Abmelden
+              {t('pf.logout')}
             </button>
             <button
               type="button"
               onClick={handleSenden}
               disabled={senden || !antwort.trim()}
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: '#4a7a9b', minHeight: '44px' }}
+              style={{ background: 'var(--meldestelle-accent)', minHeight: '44px' }}
             >
               {senden ? (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                     <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
                   </svg>
-                  Wird gesendet...
+                  {t('wiz.submitting')}
                 </>
               ) : (
                 <>
-                  Senden
+                  {t('pf.send')}
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m22 2-7 20-4-9-9-4Z" />
                     <path d="M22 2 11 13" />
@@ -562,15 +556,15 @@ export default function PostfachPage() {
       {/* ── Anhänge ── */}
       <div
         className="rounded-xl p-6 sm:p-8"
-        style={{ background: '#ffffff', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
+        style={{ background: 'var(--meldestelle-card)', boxShadow: '0 4px 12px rgba(0,0,0,0.12)' }}
       >
-        <h2 className="text-lg font-bold mb-4" style={{ color: '#212529' }}>
-          Anhänge
+        <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--meldestelle-text)' }}>
+          {t('pf.attachments')}
         </h2>
 
         {daten.anhaenge.length === 0 ? (
-          <p className="text-sm" style={{ color: '#6b7280' }}>
-            Noch keine Anhänge vorhanden.
+          <p className="text-sm" style={{ color: 'var(--meldestelle-text-muted)' }}>
+            {t('pf.noAttachments')}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -578,27 +572,27 @@ export default function PostfachPage() {
               <li
                 key={anhang.id}
                 className="rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"
-                style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}
+                style={{ background: 'var(--meldestelle-field)', border: '1px solid var(--meldestelle-field-border)' }}
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold break-all" style={{ color: '#212529' }}>
+                  <p className="text-sm font-semibold break-all" style={{ color: 'var(--meldestelle-text)' }}>
                     {anhang.dateiname}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                    {formatGroesse(anhang.groesse)} · {formatDatum(anhang.createdAt)}
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--meldestelle-text-muted)' }}>
+                    {formatGroesse(anhang.groesse, locale)} · {formatDatum(anhang.createdAt, locale)}
                   </p>
                 </div>
                 <a
                   href={`/api/public/postfach/anhang/${anhang.id}`}
                   className="inline-flex items-center gap-2 text-sm font-semibold underline shrink-0"
-                  style={{ color: '#4a7a9b' }}
+                  style={{ color: 'var(--meldestelle-accent-text)' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" x2="12" y1="15" y2="3" />
                   </svg>
-                  Herunterladen
+                  {t('pf.download')}
                 </a>
               </li>
             ))}
@@ -606,9 +600,9 @@ export default function PostfachPage() {
         )}
 
         {/* ── Upload ── */}
-        <div className="pt-6 mt-6 border-t" style={{ borderColor: '#e5e7eb' }}>
+        <div className="pt-6 mt-6 border-t" style={{ borderColor: 'var(--border)' }}>
           <label className="drk-label" htmlFor="anhang-datei">
-            Datei nachreichen
+            {t('pf.uploadLabel')}
           </label>
           <input
             id="anhang-datei"
@@ -619,15 +613,14 @@ export default function PostfachPage() {
             onChange={handleDateiAuswahl}
             disabled={hochladen}
           />
-          <p className="text-xs mt-2" style={{ color: '#6b7280' }}>
-            Erlaubte Formate: PDF, JPG, PNG, WebP, TXT, DOCX, XLSX — maximal 10 MB
-            pro Datei.
+          <p className="text-xs mt-2" style={{ color: 'var(--meldestelle-text-muted)' }}>
+            {t('pf.uploadFormats')}
           </p>
 
           {uploadFehler && (
             <div
               className="rounded-lg p-3 text-sm mt-3"
-              style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5' }}
+              style={{ background: 'var(--error-bg)', color: 'var(--error-text)', border: '1px solid var(--error-border)' }}
             >
               {uploadFehler}
             </div>
@@ -639,14 +632,14 @@ export default function PostfachPage() {
               onClick={handleHochladen}
               disabled={hochladen || !datei}
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: '#4a7a9b', minHeight: '44px' }}
+              style={{ background: 'var(--meldestelle-accent)', minHeight: '44px' }}
             >
               {hochladen ? (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
                     <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
                   </svg>
-                  Wird hochgeladen...
+                  {t('pf.uploading')}
                 </>
               ) : (
                 <>
@@ -655,7 +648,7 @@ export default function PostfachPage() {
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" x2="12" y1="3" y2="15" />
                   </svg>
-                  Anhang hochladen
+                  {t('pf.upload')}
                 </>
               )}
             </button>

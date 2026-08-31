@@ -227,7 +227,7 @@ function AdminShell({ children }: { children: ReactNode }) {
       {/* ── Top Header Bar ── */}
       <header
         className="h-14 flex items-center justify-between px-4 shrink-0"
-        style={{ background: '#2c3e50', color: '#fff' }}
+        style={{ background: 'var(--admin-topbar)', color: '#fff' }}
       >
         <div className="flex items-center gap-3">
           <button
@@ -278,7 +278,7 @@ function AdminShell({ children }: { children: ReactNode }) {
           className="shrink-0 flex flex-col overflow-y-auto transition-all duration-200"
           style={{
             width: sidebarOpen ? '220px' : '60px',
-            background: '#2c3e50',
+            background: 'var(--admin-topbar)',
           }}
         >
           <nav className="flex-1 p-3 space-y-1">
@@ -295,7 +295,7 @@ function AdminShell({ children }: { children: ReactNode }) {
         </aside>
 
         {/* ── Main Content ── */}
-        <main className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--bg)' }}>
+        <main id="main-content" className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--bg)' }}>
           {children}
         </main>
       </div>

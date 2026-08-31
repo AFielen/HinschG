@@ -42,7 +42,7 @@ export default function CollapsibleSection({ title, children, defaultOpen = true
         type="button"
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-left"
-        style={{ background: '#3d5a80', color: '#ffffff' }}
+        style={{ background: 'var(--admin-accent)', color: '#ffffff' }}
       >
         <span>{title}</span>
         <svg
