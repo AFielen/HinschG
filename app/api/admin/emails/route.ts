@@ -1,59 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, and, isNotNull, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { emails, emailKonten } from '@/lib/db/schema';
+import { emails, emailKonten, hinweise } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant } from '@/lib/db/tenant';
+
+const emailColumns = {
+  id: emails.id,
+  kontoId: emails.kontoId,
+  kontoName: emailKonten.name,
+  richtung: emails.richtung,
+  von: emails.von,
+  an: emails.an,
+  betreff: emails.betreff,
+  inhalt: emails.inhalt,
+  status: emails.status,
+  hinweisId: emails.hinweisId,
+  createdAt: emails.createdAt,
+};
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const url = new URL(request.url);
     const tab = url.searchParams.get('tab') || 'eingang';
     const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 20));
     const offset = (page - 1) * limit;
 
-    let where;
+    let statusWhere: SQL;
     switch (tab) {
       case 'gesendet':
-        where = eq(emails.status, 'Gesendet');
+        statusWhere = eq(emails.status, 'Gesendet');
         break;
       case 'warteschlange':
-        where = eq(emails.status, 'Warteschlange');
+        statusWhere = eq(emails.status, 'Warteschlange');
         break;
       case 'fehler':
-        where = eq(emails.status, 'Fehler');
+        statusWhere = eq(emails.status, 'Fehler');
         break;
       default:
-        where = eq(emails.richtung, 'Eingang');
+        statusWhere = eq(emails.richtung, 'Eingang');
     }
 
-    const rows = await db
-      .select({
-        id: emails.id,
-        kontoId: emails.kontoId,
-        kontoName: emailKonten.name,
-        richtung: emails.richtung,
-        von: emails.von,
-        an: emails.an,
-        betreff: emails.betreff,
-        inhalt: emails.inhalt,
-        status: emails.status,
-        hinweisId: emails.hinweisId,
-        createdAt: emails.createdAt,
-      })
-      .from(emails)
-      .leftJoin(emailKonten, eq(emails.kontoId, emailKonten.id))
-      .where(where)
-      .orderBy(desc(emails.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(emails)
-      .where(where);
+    const { rows, count } = await withTenant(scope, async (tx) => {
+      if (scope === 'all') {
+        // Zentrale Nutzer/Admins: alle E-Mails inkl. fallungebundener (hinweisId null)
+        const rows = await tx
+          .select(emailColumns)
+          .from(emails)
+          .leftJoin(emailKonten, eq(emails.kontoId, emailKonten.id))
+          .where(statusWhere)
+          .orderBy(desc(emails.createdAt))
+          .limit(limit)
+          .offset(offset);
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(emails)
+          .where(statusWhere);
+        return { rows, count };
+      }
+      // Mandantengebunden: nur E-Mails zu Fällen des eigenen Kunden.
+      // Der innerJoin auf hinweise wird durch RLS auf den Scope beschränkt;
+      // fallungebundene E-Mails (hinweisId null) sind hier nicht sichtbar.
+      const scopedWhere = and(statusWhere, isNotNull(emails.hinweisId));
+      const rows = await tx
+        .select(emailColumns)
+        .from(emails)
+        .innerJoin(hinweise, eq(emails.hinweisId, hinweise.id))
+        .leftJoin(emailKonten, eq(emails.kontoId, emailKonten.id))
+        .where(scopedWhere)
+        .orderBy(desc(emails.createdAt))
+        .limit(limit)
+        .offset(offset);
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(emails)
+        .innerJoin(hinweise, eq(emails.hinweisId, hinweise.id))
+        .where(scopedWhere);
+      return { rows, count };
+    });
 
     return NextResponse.json({ data: rows, total: count, page, limit });
   } catch (err) {
@@ -76,9 +104,30 @@ const createSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const body = await request.json();
     const data = createSchema.parse(body);
+
+    // Ist die E-Mail an einen Fall gebunden, muss dieser im Scope liegen —
+    // sonst könnte ein mandantengebundener Bearbeiter Mails fremden Fällen
+    // zuordnen (bzw. als offizielle Meldestelle versenden).
+    if (data.hinweisId !== undefined) {
+      const gefunden = await withTenant(scope, async (tx) => {
+        const [row] = await tx
+          .select({ id: hinweise.id })
+          .from(hinweise)
+          .where(eq(hinweise.id, data.hinweisId!))
+          .limit(1);
+        return row;
+      });
+      if (!gefunden) {
+        return NextResponse.json(
+          { error: 'Zugehörige Meldung nicht gefunden' },
+          { status: 404 },
+        );
+      }
+    }
 
     let vonAdresse = process.env.MAIL_FROM || 'meldestelle@drk-aachen.de';
     if (data.kontoId !== undefined) {
@@ -114,7 +163,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
+      return NextResponse.json({ error: 'Ungültige Eingabe' }, { status: 400 });
     }
     console.error('POST /api/admin/emails error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });

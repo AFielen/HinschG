@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { emailKonten } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
 
 // smtpPassEncrypted wird bewusst NIE an den Client gegeben
 const safeKontoColumns = {
@@ -42,7 +42,7 @@ const createSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const body = await request.json();
     const data = createSchema.parse(body);
 
@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });

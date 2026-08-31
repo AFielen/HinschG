@@ -7,6 +7,16 @@ export interface JwtPayload {
   kundeId: number | null;
 }
 
+/** Gültige Benutzerrollen (deckt sich mit userRoleEnum im Schema). */
+export const VALID_ROLES = ['admin', 'user'] as const;
+
+/**
+ * Scope-Claim, der ein Admin-/Bearbeiter-Session-Token vom Postfach-Token
+ * unterscheidet. Beide werden mit demselben JWT_SECRET signiert, dürfen aber
+ * NICHT gegeneinander austauschbar sein (sonst Rechteausweitung).
+ */
+const SESSION_SCOPE = 'session';
+
 /** Cookie-Name für die Postfach-Session des Hinweisgebers. */
 export const POSTFACH_COOKIE_NAME = 'postfach-session';
 
@@ -31,7 +41,7 @@ export async function createToken(
   payload: Omit<JwtPayload, 'kundeId'> & { kundeId?: number | null },
 ): Promise<string> {
   const { kundeId = null, ...rest } = payload;
-  return new SignJWT({ ...rest, kundeId })
+  return new SignJWT({ ...rest, kundeId, scope: SESSION_SCOPE })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
@@ -40,10 +50,26 @@ export async function createToken(
 
 export async function verifyToken(token: string): Promise<JwtPayload> {
   const { payload } = await jwtVerify(token, getSecret());
+
+  // Token-Verwechslung verhindern: nur echte Session-Tokens akzeptieren.
+  // Ein Postfach-Token (scope 'postfach') darf hier NICHT als Session gelten.
+  if (payload.scope !== SESSION_SCOPE) {
+    throw new Error('Kein gültiges Session-Token');
+  }
+  if (typeof payload.userId !== 'number') {
+    throw new Error('Ungültige Session (userId)');
+  }
+  if (
+    typeof payload.role !== 'string' ||
+    !(VALID_ROLES as readonly string[]).includes(payload.role)
+  ) {
+    throw new Error('Ungültige Session (role)');
+  }
+
   return {
-    userId: payload.userId as number,
+    userId: payload.userId,
     username: payload.username as string,
-    role: payload.role as string,
+    role: payload.role,
     kundeId: typeof payload.kundeId === 'number' ? payload.kundeId : null,
   };
 }

@@ -6,6 +6,12 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **JWT-Scope-Verwechslung behoben (kritisch):** Admin-Session-Tokens tragen jetzt einen expliziten `scope: 'session'`-Claim; `verifyToken` erzwingt ihn und validiert `role`/`userId`. Ein Postfach-Token (`scope: 'postfach'`) wird damit nicht mehr als Admin-Session akzeptiert — vorher hätte ein angemeldeter Hinweisgeber durch Umkopieren seines Cookies vollen mandantenübergreifenden Lesezugriff auf alle Meldungen erlangt. `kundeScopeOf` ist zusätzlich fail-closed bei ungültiger Rolle (`lib/auth/jwt.ts`, `lib/db/tenant.ts`, Test `tests/jwt.test.ts`)
+- **Mandantentrennung der E-Mail-Routen:** `/api/admin/emails` (Liste/Detail/PUT/DELETE) filtert jetzt über den RLS-geschützten `hinweise`-Join nach Mandanten-Scope; mandantengebundene Bearbeiter sehen bzw. ändern nur E-Mails zu Fällen ihres Kunden, fallungebundene E-Mails nur zentrale Nutzer. `POST` prüft die Fallzugehörigkeit (`hinweisId`) gegen den Scope (`app/api/admin/emails/route.ts`, `app/api/admin/emails/[id]/route.ts`)
+- **Rollenprüfung auf E-Mail-Konfiguration:** systemweite SMTP-Konten und Vorlagen sind nur noch für Administratoren mutierbar — POST/DELETE `email-konten`, POST/PUT/DELETE `email-vorlagen` nutzen `requireRole('admin')` mit 403-Zweig
+
 ### Added
 
 - `AUDIT.md` — vollständiger Audit-Bericht (Bestandsaufnahme, HinSchG-/DSGVO-/Sicherheits-Befunde, Roadmap in 4 Phasen)

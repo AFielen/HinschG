@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { emailVorlagen } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,7 +40,7 @@ const updateSchema = z.object({
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const { id } = await params;
     const body = await request.json();
     const data = updateSchema.parse(body);
@@ -60,6 +60,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
     }
@@ -70,7 +73,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const { id } = await params;
 
     const [deleted] = await db
@@ -86,6 +89,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
     console.error('DELETE /api/admin/email-vorlagen/[id] error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });

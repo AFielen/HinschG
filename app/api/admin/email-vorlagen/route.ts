@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { emailVorlagen } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +33,7 @@ const createSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const body = await request.json();
     const data = createSchema.parse(body);
 
@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });

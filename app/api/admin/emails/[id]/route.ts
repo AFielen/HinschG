@@ -2,19 +2,41 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { emails } from '@/lib/db/schema';
+import { emails, hinweise } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant, type KundeScope } from '@/lib/db/tenant';
+
+/**
+ * Lädt eine E-Mail nur, wenn sie im Mandanten-Scope liegt. Fallgebundene
+ * E-Mails werden über den RLS-geschützten hinweise-Join geprüft;
+ * fallungebundene (hinweisId null) sind nur für zentrale Nutzer ('all')
+ * sichtbar.
+ */
+async function ladeEmailImScope(
+  tx: typeof db,
+  id: number,
+  scope: KundeScope,
+): Promise<typeof emails.$inferSelect | undefined> {
+  if (scope === 'all') {
+    const [email] = await tx.select().from(emails).where(eq(emails.id, id)).limit(1);
+    return email;
+  }
+  const [row] = await tx
+    .select({ email: emails })
+    .from(emails)
+    .innerJoin(hinweise, eq(emails.hinweisId, hinweise.id))
+    .where(eq(emails.id, id))
+    .limit(1);
+  return row?.email;
+}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const { id } = await params;
 
-    const [email] = await db
-      .select()
-      .from(emails)
-      .where(eq(emails.id, Number(id)))
-      .limit(1);
+    const email = await withTenant(scope, (tx) => ladeEmailImScope(tx, Number(id), scope));
 
     if (!email) {
       return NextResponse.json({ error: 'E-Mail nicht gefunden' }, { status: 404 });
@@ -38,16 +60,22 @@ const updateSchema = z.object({
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const { id } = await params;
     const body = await request.json();
     const data = updateSchema.parse(body);
 
-    const [updated] = await db
-      .update(emails)
-      .set(data)
-      .where(eq(emails.id, Number(id)))
-      .returning();
+    const updated = await withTenant(scope, async (tx) => {
+      const vorhanden = await ladeEmailImScope(tx, Number(id), scope);
+      if (!vorhanden) return undefined;
+      const [row] = await tx
+        .update(emails)
+        .set(data)
+        .where(eq(emails.id, Number(id)))
+        .returning();
+      return row;
+    });
 
     if (!updated) {
       return NextResponse.json({ error: 'E-Mail nicht gefunden' }, { status: 404 });
@@ -59,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
+      return NextResponse.json({ error: 'Ungültige Eingabe' }, { status: 400 });
     }
     console.error('PUT /api/admin/emails/[id] error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });
@@ -68,13 +96,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const { id } = await params;
 
-    const [deleted] = await db
-      .delete(emails)
-      .where(eq(emails.id, Number(id)))
-      .returning({ id: emails.id });
+    const deleted = await withTenant(scope, async (tx) => {
+      const vorhanden = await ladeEmailImScope(tx, Number(id), scope);
+      if (!vorhanden) return undefined;
+      const [row] = await tx
+        .delete(emails)
+        .where(eq(emails.id, Number(id)))
+        .returning({ id: emails.id });
+      return row;
+    });
 
     if (!deleted) {
       return NextResponse.json({ error: 'E-Mail nicht gefunden' }, { status: 404 });

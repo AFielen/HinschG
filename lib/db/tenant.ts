@@ -15,11 +15,18 @@ export type KundeScope = 'all' | number;
 /**
  * Ermittelt den Mandanten-Scope einer Session:
  * 'all' für Admins und zentrale Benutzer (kundeId null), sonst die kundeId.
+ *
+ * Fail-closed: Eine Session ohne gültige Rolle darf niemals 'all' erhalten
+ * (Defense in Depth gegen manipulierte/fremde Tokens). verifyToken lehnt
+ * solche Tokens bereits ab; diese Prüfung ist die zweite Verteidigungslinie.
  */
 export function kundeScopeOf(session: {
   role: string;
   kundeId: number | null;
 }): KundeScope {
+  if (session.role !== 'admin' && session.role !== 'user') {
+    throw new Error('Ungültige Rolle für Mandanten-Scope');
+  }
   if (session.role === 'admin' || session.kundeId === null) {
     return 'all';
   }
