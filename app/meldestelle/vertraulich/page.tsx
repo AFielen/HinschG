@@ -56,6 +56,7 @@ export default function VertraulichPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [aktenzeichen, setAktenzeichen] = useState('');
+  const [zugangscode, setZugangscode] = useState('');
   const [error, setError] = useState('');
 
   function update(field: keyof FormData, value: string) {
@@ -97,6 +98,7 @@ export default function VertraulichPage() {
       }
       const data = await res.json();
       setAktenzeichen(data.aktenzeichen ?? '');
+      setZugangscode(data.zugangscode ?? '');
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ein unbekannter Fehler ist aufgetreten');
@@ -123,23 +125,58 @@ export default function VertraulichPage() {
               wird von unserer Meldestelle vertraulich bearbeitet.
             </p>
             {aktenzeichen && (
-              <div className="rounded-lg p-4 mt-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-                <p className="text-sm font-semibold" style={{ color: '#0369a1' }}>
-                  Ihr Aktenzeichen:
-                </p>
-                <p className="text-lg font-bold font-mono mt-1" style={{ color: '#0c4a6e' }}>
-                  {aktenzeichen}
-                </p>
-                <p className="text-xs mt-2" style={{ color: '#6b7280' }}>
-                  Bitte notieren Sie sich dieses Aktenzeichen für Rückfragen.
+              <div className="rounded-lg p-5 mt-4 text-left" style={{ background: '#fffbeb', border: '2px solid #f59e0b' }}>
+                <div className="flex items-start gap-2 mb-4">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                  <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
+                    Notieren Sie Aktenzeichen und Zugangscode jetzt — sie werden aus
+                    Sicherheitsgründen nur EINMAL angezeigt und können nicht
+                    wiederhergestellt werden.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#92400e' }}>
+                      Aktenzeichen
+                    </p>
+                    <p className="text-lg font-bold font-mono mt-1 break-all" style={{ color: '#212529' }}>
+                      {aktenzeichen}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#92400e' }}>
+                      Zugangscode
+                    </p>
+                    <p className="text-lg font-bold font-mono mt-1 break-all" style={{ color: '#212529' }}>
+                      {zugangscode}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs mt-4" style={{ color: '#6b7280' }}>
+                  Mit diesen Angaben können Sie sich jederzeit im{' '}
+                  <Link href="/meldestelle/postfach" className="underline font-semibold" style={{ color: '#4a7a9b' }}>
+                    Postfach
+                  </Link>{' '}
+                  anmelden, den Bearbeitungsstand einsehen, Rückfragen beantworten und
+                  Unterlagen nachreichen.
                 </p>
               </div>
             )}
-            <div className="pt-4">
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
               <Link
-                href="/meldestelle"
+                href="/meldestelle/postfach"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors"
                 style={{ background: '#4a7a9b', minHeight: '44px' }}
+              >
+                Zum Postfach
+              </Link>
+              <Link
+                href="/meldestelle"
+                className="drk-btn-secondary inline-flex items-center justify-center gap-2"
               >
                 Zurück zur Startseite
               </Link>

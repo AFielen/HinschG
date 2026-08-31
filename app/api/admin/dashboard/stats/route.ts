@@ -1,65 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, sql, gte } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { eq, and, sql } from 'drizzle-orm';
 import { hinweise, aufgaben } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant } from '@/lib/db/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const url = new URL(request.url);
     const days = Math.min(365, Math.max(1, Number(url.searchParams.get('timeframe')) || 30));
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const [completedResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(hinweise)
-      .where(
-        sql`${hinweise.status} = 'Abgeschlossen' AND ${hinweise.updatedAt} >= ${since}`,
-      );
+    // Defense in Depth zusätzlich zur RLS-Policy
+    const scopeCond = scope === 'all' ? undefined : eq(hinweise.kundeId, scope);
 
-    const [avgResult] = await db
-      .select({
-        avg: sql<number>`coalesce(avg(extract(epoch from (${aufgaben.erledigtAm} - ${aufgaben.createdAt})) / 86400)::numeric(10,1), 0)`,
-      })
-      .from(aufgaben)
-      .where(
-        sql`${aufgaben.status} = 'Abgeschlossen' AND ${aufgaben.erledigtAm} IS NOT NULL AND ${aufgaben.createdAt} >= ${since}`,
-      );
+    const stats = await withTenant(scope, async (tx) => {
+      const [completedResult] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hinweise)
+        .where(
+          and(
+            sql`${hinweise.status} = 'Abgeschlossen' AND ${hinweise.updatedAt} >= ${since}`,
+            scopeCond,
+          ),
+        );
 
-    const [totalTasks] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(aufgaben)
-      .where(gte(aufgaben.createdAt, since));
+      const [avgResult] = await tx
+        .select({
+          avg: sql<number>`coalesce(avg(extract(epoch from (${aufgaben.erledigtAm} - ${aufgaben.createdAt})) / 86400)::numeric(10,1), 0)`,
+        })
+        .from(aufgaben)
+        .innerJoin(hinweise, eq(aufgaben.hinweisId, hinweise.id))
+        .where(
+          and(
+            sql`${aufgaben.status} = 'Abgeschlossen' AND ${aufgaben.erledigtAm} IS NOT NULL AND ${aufgaben.createdAt} >= ${since}`,
+            scopeCond,
+          ),
+        );
 
-    const [onTimeTasks] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(aufgaben)
-      .where(
-        sql`${aufgaben.createdAt} >= ${since} AND ${aufgaben.status} = 'Abgeschlossen' AND (${aufgaben.faelligBis} IS NULL OR ${aufgaben.erledigtAm} <= ${aufgaben.faelligBis})`,
-      );
+      const [erledigteTasks] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(aufgaben)
+        .innerJoin(hinweise, eq(aufgaben.hinweisId, hinweise.id))
+        .where(
+          and(
+            sql`${aufgaben.createdAt} >= ${since} AND ${aufgaben.status} = 'Abgeschlossen'`,
+            scopeCond,
+          ),
+        );
 
-    const onTimePercentage = totalTasks.count > 0
-      ? Math.round((onTimeTasks.count / totalTasks.count) * 100)
-      : 100;
+      const [onTimeTasks] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(aufgaben)
+        .innerJoin(hinweise, eq(aufgaben.hinweisId, hinweise.id))
+        .where(
+          and(
+            sql`${aufgaben.createdAt} >= ${since} AND ${aufgaben.status} = 'Abgeschlossen' AND (${aufgaben.faelligBis} IS NULL OR ${aufgaben.erledigtAm} <= ${aufgaben.faelligBis})`,
+            scopeCond,
+          ),
+        );
 
-    const [statusCounts] = await db
-      .select({
-        neu: sql<number>`count(*) filter (where ${hinweise.status} = 'Neu')::int`,
-        inBearbeitung: sql<number>`count(*) filter (where ${hinweise.status} = 'InBearbeitung')::int`,
-        abgeschlossen: sql<number>`count(*) filter (where ${hinweise.status} = 'Abgeschlossen')::int`,
-      })
-      .from(hinweise);
+      const [statusCounts] = await tx
+        .select({
+          neu: sql<number>`count(*) filter (where ${hinweise.status} = 'Neu')::int`,
+          inBearbeitung: sql<number>`count(*) filter (where ${hinweise.status} = 'InBearbeitung')::int`,
+          abgeschlossen: sql<number>`count(*) filter (where ${hinweise.status} = 'Abgeschlossen')::int`,
+        })
+        .from(hinweise)
+        .where(scopeCond);
+
+      return { completedResult, avgResult, erledigteTasks, onTimeTasks, statusCounts };
+    });
+
+    // Fristgerecht erledigte / erledigte Aufgaben (nicht / alle Aufgaben)
+    const onTimePercentage =
+      stats.erledigteTasks.count > 0
+        ? Math.round((stats.onTimeTasks.count / stats.erledigteTasks.count) * 100)
+        : 100;
 
     return NextResponse.json({
-      completedCount: completedResult.count,
-      avgProcessingDays: Number(avgResult.avg),
+      completedCount: stats.completedResult.count,
+      avgProcessingDays: Number(stats.avgResult.avg),
       onTimePercentage,
       statusCounts: {
-        Neu: statusCounts.neu,
-        InBearbeitung: statusCounts.inBearbeitung,
-        Abgeschlossen: statusCounts.abgeschlossen,
+        Neu: stats.statusCounts.neu,
+        InBearbeitung: stats.statusCounts.inBearbeitung,
+        Abgeschlossen: stats.statusCounts.abgeschlossen,
       },
     });
   } catch (err) {

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { users, kundengruppen } from '@/lib/db/schema';
+import { users, kundengruppen, systemProtokoll } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 
 export async function POST(request: NextRequest) {
@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
         email: 'admin@drk-aachen.de',
         role: 'admin',
         active: true,
+        // null = zentraler Zugriff auf alle Mandanten
+        kundeId: null,
       })
       .returning();
 
@@ -65,6 +67,12 @@ export async function POST(request: NextRequest) {
       .insert(kundengruppen)
       .values(gruppenNames.map((name) => ({ name })))
       .returning();
+
+    await db.insert(systemProtokoll).values({
+      ereignis: 'Seed ausgeführt',
+      benutzer: adminUser.username,
+      details: 'Admin-Benutzer und Kundengruppen angelegt',
+    });
 
     return NextResponse.json({
       success: true,

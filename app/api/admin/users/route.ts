@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { users, kunden, systemProtokoll } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth/middleware';
 import { hashPassword } from '@/lib/auth/password';
 
@@ -13,6 +13,7 @@ const safeUserColumns = {
   email: users.email,
   role: users.role,
   active: users.active,
+  kundeId: users.kundeId,
   createdAt: users.createdAt,
 };
 
@@ -50,11 +51,13 @@ const createSchema = z.object({
     .string()
     .min(12, 'Kennwort muss mindestens 12 Zeichen lang sein.')
     .max(255),
+  // null = zentraler Zugriff auf alle Mandanten
+  kundeId: z.number({ coerce: true }).int().positive().nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(request, 'admin');
+    const session = await requireRole(request, 'admin');
     const body = await request.json();
     const data = createSchema.parse(body);
 
@@ -71,6 +74,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (typeof data.kundeId === 'number') {
+      const [kunde] = await db
+        .select({ id: kunden.id })
+        .from(kunden)
+        .where(eq(kunden.id, data.kundeId))
+        .limit(1);
+      if (!kunde) {
+        return NextResponse.json(
+          { error: 'Der angegebene Kunde existiert nicht' },
+          { status: 400 },
+        );
+      }
+    }
+
     const passwordHash = await hashPassword(data.password);
 
     const [created] = await db
@@ -82,8 +99,15 @@ export async function POST(request: NextRequest) {
         email: data.email || null,
         role: data.role,
         active: true,
+        kundeId: data.kundeId ?? null,
       })
       .returning(safeUserColumns);
+
+    await db.insert(systemProtokoll).values({
+      ereignis: 'Benutzer angelegt',
+      benutzer: session.username,
+      details: `Benutzer '${created.username}' angelegt (Rolle: ${created.role}, Kunde: ${created.kundeId ?? 'alle'})`,
+    });
 
     return NextResponse.json({ user: created }, { status: 201 });
   } catch (err) {

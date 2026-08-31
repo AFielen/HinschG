@@ -1,28 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { hinweise } from '@/lib/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
+import { aufgaben, hinweise } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant } from '@/lib/db/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const url = new URL(request.url);
     const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 30));
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const rows = await db
-      .select({
-        date: sql<string>`to_char(${hinweise.updatedAt}::date, 'YYYY-MM-DD')`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(hinweise)
-      .where(
-        sql`${hinweise.status} = 'Abgeschlossen' AND ${hinweise.updatedAt} >= ${since}`,
-      )
-      .groupBy(sql`${hinweise.updatedAt}::date`)
-      .orderBy(sql`${hinweise.updatedAt}::date`);
+    // Defense in Depth zusätzlich zur RLS-Policy
+    const scopeCond = scope === 'all' ? undefined : eq(hinweise.kundeId, scope);
+
+    // Erledigte Aufgaben pro Tag auf Basis von erledigt_am (nicht updated_at)
+    const rows = await withTenant(scope, (tx) =>
+      tx
+        .select({
+          date: sql<string>`to_char(${aufgaben.erledigtAm}::date, 'YYYY-MM-DD')`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(aufgaben)
+        .innerJoin(hinweise, eq(aufgaben.hinweisId, hinweise.id))
+        .where(
+          and(
+            sql`${aufgaben.status} = 'Abgeschlossen' AND ${aufgaben.erledigtAm} IS NOT NULL AND ${aufgaben.erledigtAm} >= ${since}`,
+            scopeCond,
+          ),
+        )
+        .groupBy(sql`${aufgaben.erledigtAm}::date`)
+        .orderBy(sql`${aufgaben.erledigtAm}::date`),
+    );
 
     return NextResponse.json(rows);
   } catch (err) {

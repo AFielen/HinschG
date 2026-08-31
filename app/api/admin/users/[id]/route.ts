@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { users, kunden, systemProtokoll } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth/middleware';
 import { hashPassword } from '@/lib/auth/password';
 
@@ -13,6 +13,7 @@ const safeUserColumns = {
   email: users.email,
   role: users.role,
   active: users.active,
+  kundeId: users.kundeId,
   createdAt: users.createdAt,
 };
 
@@ -26,6 +27,8 @@ const updateSchema = z.object({
     .min(12, 'Kennwort muss mindestens 12 Zeichen lang sein.')
     .max(255)
     .optional(),
+  // null = zentraler Zugriff auf alle Mandanten
+  kundeId: z.number({ coerce: true }).int().positive().nullable().optional(),
 });
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -57,11 +60,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    if (typeof data.kundeId === 'number') {
+      const [kunde] = await db
+        .select({ id: kunden.id })
+        .from(kunden)
+        .where(eq(kunden.id, data.kundeId))
+        .limit(1);
+      if (!kunde) {
+        return NextResponse.json(
+          { error: 'Der angegebene Kunde existiert nicht' },
+          { status: 400 },
+        );
+      }
+    }
+
     const updates: Partial<typeof users.$inferInsert> = {};
     if (data.displayName !== undefined) updates.displayName = data.displayName;
     if (data.email !== undefined) updates.email = data.email || null;
     if (data.role !== undefined) updates.role = data.role;
     if (data.active !== undefined) updates.active = data.active;
+    if (data.kundeId !== undefined) updates.kundeId = data.kundeId;
     if (data.newPassword !== undefined) {
       updates.passwordHash = await hashPassword(data.newPassword);
     }
@@ -81,6 +99,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!updated) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 });
+    }
+
+    // Rollenwechsel, (De-)Aktivierung und Mandantenwechsel protokollieren
+    const geaendert: string[] = [];
+    if (data.role !== undefined) geaendert.push(`Rolle: ${data.role}`);
+    if (data.active !== undefined) {
+      geaendert.push(data.active ? 'aktiviert' : 'deaktiviert');
+    }
+    if (data.kundeId !== undefined) {
+      geaendert.push(`Kunde: ${data.kundeId ?? 'alle'}`);
+    }
+    if (geaendert.length > 0) {
+      await db.insert(systemProtokoll).values({
+        ereignis: 'Benutzer geändert',
+        benutzer: session.username,
+        details: `Benutzer '${updated.username}': ${geaendert.join(', ')}`,
+      });
     }
 
     return NextResponse.json({ user: updated });

@@ -9,6 +9,16 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Added
 
 - `AUDIT.md` — vollständiger Audit-Bericht (Bestandsaufnahme, HinSchG-/DSGVO-/Sicherheits-Befunde, Roadmap in 4 Phasen)
+- **Anonymes Postfach / Rückkanal (§ 16 HinSchG):** Zugangscode bei Meldungsabgabe (kryptografisch, bcrypt-gehasht), Routen `/api/public/postfach{,/login,/nachricht,/logout}`, Seite `/meldestelle/postfach` mit Status und Zwei-Wege-Nachrichten (`nachrichten`-Tabelle)
+- **Fristen-Engine (§ 17 HinSchG):** `lib/fristen.ts` (+7 Tage Eingangsbestätigung, +3 Monate Rückmeldung), automatische Eingangsbestätigung als Postfach-Nachricht bei Eingang, `GET /api/admin/dashboard/fristen` (überfällig/bald fällig), tägliche Erinnerungs-Aufgaben
+- **Löschkonzept (§ 11 Abs. 5 HinSchG):** `loeschenAm` = Abschluss + 3 Jahre, täglicher Löschjob, `lib/loeschung.ts` mit `loeschprotokoll`-Tabelle (dokumentierte Löschung statt Audit-Trail-Vernichtung); manuelles Löschen nur noch als Admin über denselben Weg
+- **Mandantentrennung:** `users.kundeId`, Scope-Filter in allen Fall-Routen, Row-Level-Security (ENABLE+FORCE) auf `hinweise` und `mitarbeiter` via `lib/db/tenant.ts` (`SET LOCAL app.kunde_ids`)
+- **PII-Verschlüsselung at rest:** `lib/crypto.ts` (AES-256-GCM, `ENCRYPTION_KEY`) für Hinweisgeber-Personendaten; Meldungstext bleibt durchsuchbar
+- **Drizzle-Migrationen:** Baseline + Phase-2- + RLS-Migration in `lib/db/migrations/`, Runner `scripts/migrate.mjs` (`npm run db:migrate`), Migrationslauf beim Container-Start; gegen PostgreSQL 16 smoke-getestet
+- Hintergrund-Jobs via `instrumentation.ts`/`lib/jobs.ts` (Löschjob, Fristen-Erinnerung, E-Mail-Queue-Stub)
+- `system_protokoll`-Tabelle + `GET /api/admin/protokoll` (Logins, Fehlversuche, Benutzer-/Seed-Ereignisse)
+- `POST /api/admin/hinweise/[id]/nachricht` (Antwort an Hinweisgeber, optional als Rückmeldung § 17 Abs. 2)
+- Aktenzeichen aus `lib/aktenzeichen.ts` (crypto.randomInt, Kollisions-Retry) statt `Math.random()`
 - `lib/rate-limit.ts` — In-Memory-Rate-Limiter (Sliding Window); aktiv auf Login (5/15 Min) und öffentlicher Meldungsabgabe (5/Std)
 - Benutzerverwaltung: API `/api/admin/users`, `/api/admin/users/[id]`, `/api/admin/me/password` (nur Rolle `admin` bzw. eigenes Passwort) und Admin-Seite `/admin/benutzer` inkl. „Eigenes Passwort ändern"
 - `requireRole()` in `lib/auth/middleware.ts` für rollenbasierte API-Autorisierung

@@ -1,5 +1,10 @@
 import { NextRequest } from 'next/server';
-import { verifyToken, type JwtPayload } from './jwt';
+import {
+  verifyToken,
+  verifyPostfachToken,
+  POSTFACH_COOKIE_NAME,
+  type JwtPayload,
+} from './jwt';
 
 const COOKIE_NAME = 'hinweis-session';
 
@@ -31,6 +36,24 @@ export async function requireRole(
   const session = await requireAuth(request);
   if (session.role !== role) {
     throw new Error('Keine Berechtigung');
+  }
+  return session;
+}
+
+/**
+ * Prüft die Postfach-Session des Hinweisgebers (Cookie 'postfach-session').
+ */
+export async function requirePostfach(
+  request: NextRequest,
+): Promise<{ hinweisId: number }> {
+  const token = request.cookies.get(POSTFACH_COOKIE_NAME)?.value;
+  if (!token) {
+    throw new Error('Nicht authentifiziert');
+  }
+
+  const session = await verifyPostfachToken(token);
+  if (!session) {
+    throw new Error('Nicht authentifiziert');
   }
   return session;
 }

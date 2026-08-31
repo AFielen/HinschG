@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { kunden, kundengruppen, mitarbeiter } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { kunden, kundengruppen, mitarbeiter, hinweise } from '@/lib/db/schema';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant } from '@/lib/db/tenant';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
     const { id } = await params;
+
+    // Nicht-Admins mit Mandanten-Scope dürfen nur den eigenen Kunden sehen
+    const scope = kundeScopeOf(session);
+    if (scope !== 'all' && scope !== Number(id)) {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
 
     const [kunde] = await db
       .select({
@@ -48,10 +55,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
     }
 
-    const mitarbeiterRows = await db
-      .select()
-      .from(mitarbeiter)
-      .where(eq(mitarbeiter.kundeId, Number(id)));
+    // mitarbeiter hat FORCE RLS — Zugriff nur über withTenant
+    const mitarbeiterRows = await withTenant(scope, (tx) =>
+      tx.select().from(mitarbeiter).where(eq(mitarbeiter.kundeId, Number(id))),
+    );
 
     return NextResponse.json({ ...kunde, mitarbeiter: mitarbeiterRows });
   } catch (err) {
@@ -90,7 +97,7 @@ const updateSchema = z.object({
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const { id } = await params;
     const body = await request.json();
     const data = updateSchema.parse(body);
@@ -110,6 +117,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
     }
@@ -120,7 +130,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const { id } = await params;
     const kundeId = Number(id);
 
@@ -134,13 +144,49 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: 'Kunde nicht gefunden' }, { status: 404 });
     }
 
-    await db.delete(mitarbeiter).where(eq(mitarbeiter.kundeId, kundeId));
-    await db.delete(kunden).where(eq(kunden.id, kundeId));
+    // hinweise und mitarbeiter haben FORCE RLS — Zugriff nur über withTenant
+    const result = await withTenant('all', async (tx) => {
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hinweise)
+        .where(eq(hinweise.kundeId, kundeId));
+
+      if (count > 0) {
+        return { blocked: true as const };
+      }
+
+      await tx.delete(mitarbeiter).where(eq(mitarbeiter.kundeId, kundeId));
+      await tx.delete(kunden).where(eq(kunden.id, kundeId));
+      return { blocked: false as const };
+    });
+
+    if (result.blocked) {
+      return NextResponse.json(
+        {
+          error:
+            'Für diese Organisation existieren Meldungen. Löschen ist nicht möglich, solange Meldungen vorhanden sind.',
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
+    // FK-Verletzung (z.B. Benutzer sind dem Kunden zugeordnet)
+    if (err && typeof err === 'object' && 'code' in err && err.code === '23503') {
+      return NextResponse.json(
+        {
+          error:
+            'Der Kunde wird noch von anderen Datensätzen (z.B. Benutzern) referenziert und kann nicht gelöscht werden.',
+        },
+        { status: 409 },
+      );
     }
     console.error('DELETE /api/admin/kunden/[id] error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });

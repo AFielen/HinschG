@@ -9,6 +9,9 @@ import type {
   emailKonten,
   emailVorlagen,
   emails,
+  nachrichten,
+  loeschprotokoll,
+  systemProtokoll,
 } from './schema';
 
 // ── Select Types (Daten aus der DB lesen) ──────────────────────────────────
@@ -23,6 +26,9 @@ export type ArchivEintrag = typeof archiv.$inferSelect;
 export type EmailKonto = typeof emailKonten.$inferSelect;
 export type EmailVorlage = typeof emailVorlagen.$inferSelect;
 export type Email = typeof emails.$inferSelect;
+export type Nachricht = typeof nachrichten.$inferSelect;
+export type LoeschprotokollEintrag = typeof loeschprotokoll.$inferSelect;
+export type SystemProtokollEintrag = typeof systemProtokoll.$inferSelect;
 
 // ── Insert Types (Daten in die DB schreiben) ───────────────────────────────
 
@@ -36,3 +42,6 @@ export type NewArchivEintrag = typeof archiv.$inferInsert;
 export type NewEmailKonto = typeof emailKonten.$inferInsert;
 export type NewEmailVorlage = typeof emailVorlagen.$inferInsert;
 export type NewEmail = typeof emails.$inferInsert;
+export type NewNachricht = typeof nachrichten.$inferInsert;
+export type NewLoeschprotokollEintrag = typeof loeschprotokoll.$inferInsert;
+export type NewSystemProtokollEintrag = typeof systemProtokoll.$inferInsert;

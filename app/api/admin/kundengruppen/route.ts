@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { kundengruppen } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +24,7 @@ const createSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const body = await request.json();
     const data = createSchema.parse(body);
 
@@ -38,8 +38,18 @@ export async function POST(request: NextRequest) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
     }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
+    }
+    // Unique-Verletzung (Name bereits vorhanden)
+    if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
+      return NextResponse.json(
+        { error: 'Eine Kundengruppe mit diesem Namen existiert bereits' },
+        { status: 409 },
+      );
     }
     console.error('POST /api/admin/kundengruppen error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });

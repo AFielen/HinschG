@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq, ilike, or, sql, desc, asc } from 'drizzle-orm';
+import { eq, ilike, or, and, sql, desc, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { kunden, kundengruppen } from '@/lib/db/schema';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireRole } from '@/lib/auth/middleware';
+import { kundeScopeOf } from '@/lib/db/tenant';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const url = new URL(request.url);
     const search = url.searchParams.get('search');
     const sortBy = url.searchParams.get('sort') || 'firma';
@@ -16,13 +18,21 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 20));
     const offset = (page - 1) * limit;
 
-    const where = search
-      ? or(
+    const conditions = [];
+    // Nicht-Admins mit Mandanten-Scope sehen nur den eigenen Kunden
+    if (scope !== 'all') {
+      conditions.push(eq(kunden.id, scope));
+    }
+    if (search) {
+      conditions.push(
+        or(
           ilike(kunden.firma, `%${search}%`),
           ilike(kunden.ort, `%${search}%`),
           ilike(kunden.firmenEmail, `%${search}%`),
-        )
-      : undefined;
+        )!,
+      );
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const sortCol = sortBy === 'ort' ? kunden.ort
       : sortBy === 'plz' ? kunden.plz
@@ -92,7 +102,7 @@ const createSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    await requireRole(request, 'admin');
     const body = await request.json();
     const data = createSchema.parse(body);
 
@@ -105,6 +115,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
+    }
+    if (err instanceof Error && err.message === 'Keine Berechtigung') {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });

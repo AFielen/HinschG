@@ -1,0 +1,1582 @@
+{
+  "id": "99ec15d7-467d-4af0-b72f-dc6b4edaf746",
+  "prevId": "1da0b7a1-9c4b-4f52-8797-9fc9695d9885",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.archiv": {
+      "name": "archiv",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "hinweis_id": {
+          "name": "hinweis_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "art": {
+          "name": "art",
+          "type": "archiv_art",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ersteller": {
+          "name": "ersteller",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldung": {
+          "name": "meldung",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "archiv_hinweis_id_idx": {
+          "name": "archiv_hinweis_id_idx",
+          "columns": [
+            {
+              "expression": "hinweis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "archiv_hinweis_id_hinweise_id_fk": {
+          "name": "archiv_hinweis_id_hinweise_id_fk",
+          "tableFrom": "archiv",
+          "tableTo": "hinweise",
+          "columnsFrom": [
+            "hinweis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.aufgaben": {
+      "name": "aufgaben",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "hinweis_id": {
+          "name": "hinweis_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "titel": {
+          "name": "titel",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "beschreibung": {
+          "name": "beschreibung",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "aufgabe_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Offen'"
+        },
+        "schritt": {
+          "name": "schritt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "schritt_name": {
+          "name": "schritt_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bearbeiter_id": {
+          "name": "bearbeiter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "faellig_bis": {
+          "name": "faellig_bis",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_datum": {
+          "name": "start_datum",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "erledigt_am": {
+          "name": "erledigt_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "aufgaben_hinweis_id_idx": {
+          "name": "aufgaben_hinweis_id_idx",
+          "columns": [
+            {
+              "expression": "hinweis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "aufgaben_bearbeiter_id_idx": {
+          "name": "aufgaben_bearbeiter_id_idx",
+          "columns": [
+            {
+              "expression": "bearbeiter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "aufgaben_status_idx": {
+          "name": "aufgaben_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "aufgaben_hinweis_id_hinweise_id_fk": {
+          "name": "aufgaben_hinweis_id_hinweise_id_fk",
+          "tableFrom": "aufgaben",
+          "tableTo": "hinweise",
+          "columnsFrom": [
+            "hinweis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "aufgaben_bearbeiter_id_users_id_fk": {
+          "name": "aufgaben_bearbeiter_id_users_id_fk",
+          "tableFrom": "aufgaben",
+          "tableTo": "users",
+          "columnsFrom": [
+            "bearbeiter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.email_konten": {
+      "name": "email_konten",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "smtp_host": {
+          "name": "smtp_host",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "smtp_port": {
+          "name": "smtp_port",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "smtp_user": {
+          "name": "smtp_user",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "smtp_pass_encrypted": {
+          "name": "smtp_pass_encrypted",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.email_vorlagen": {
+      "name": "email_vorlagen",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "template_name": {
+          "name": "template_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "from_name": {
+          "name": "from_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject": {
+          "name": "subject",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "html_content": {
+          "name": "html_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "has_attachment": {
+          "name": "has_attachment",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.emails": {
+      "name": "emails",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "konto_id": {
+          "name": "konto_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "richtung": {
+          "name": "richtung",
+          "type": "email_richtung",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "von": {
+          "name": "von",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "an": {
+          "name": "an",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "betreff": {
+          "name": "betreff",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inhalt": {
+          "name": "inhalt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "email_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hinweis_id": {
+          "name": "hinweis_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "emails_konto_id_idx": {
+          "name": "emails_konto_id_idx",
+          "columns": [
+            {
+              "expression": "konto_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "emails_hinweis_id_idx": {
+          "name": "emails_hinweis_id_idx",
+          "columns": [
+            {
+              "expression": "hinweis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "emails_konto_id_email_konten_id_fk": {
+          "name": "emails_konto_id_email_konten_id_fk",
+          "tableFrom": "emails",
+          "tableTo": "email_konten",
+          "columnsFrom": [
+            "konto_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "emails_hinweis_id_hinweise_id_fk": {
+          "name": "emails_hinweis_id_hinweise_id_fk",
+          "tableFrom": "emails",
+          "tableTo": "hinweise",
+          "columnsFrom": [
+            "hinweis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.hinweise": {
+      "name": "hinweise",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "aktenzeichen": {
+          "name": "aktenzeichen",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "hinweis_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Neu'"
+        },
+        "ist_anonym": {
+          "name": "ist_anonym",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "kunde_id": {
+          "name": "kunde_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meldeweg": {
+          "name": "meldeweg",
+          "type": "meldeweg",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kategorie": {
+          "name": "kategorie",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "datum_verstoss": {
+          "name": "datum_verstoss",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "beteiligte": {
+          "name": "beteiligte",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldungstext": {
+          "name": "meldungstext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_anrede": {
+          "name": "hinweisgeber_anrede",
+          "type": "anrede",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_vorname": {
+          "name": "hinweisgeber_vorname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_nachname": {
+          "name": "hinweisgeber_nachname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_telefon": {
+          "name": "hinweisgeber_telefon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_email": {
+          "name": "hinweisgeber_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hinweisgeber_anmerkungen": {
+          "name": "hinweisgeber_anmerkungen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "zugangscode_hash": {
+          "name": "zugangscode_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eingangsbestaetigung_am": {
+          "name": "eingangsbestaetigung_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eingangsbestaetigung_faellig_am": {
+          "name": "eingangsbestaetigung_faellig_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rueckmeldung_am": {
+          "name": "rueckmeldung_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rueckmeldung_faellig_am": {
+          "name": "rueckmeldung_faellig_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "abgeschlossen_am": {
+          "name": "abgeschlossen_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "loeschen_am": {
+          "name": "loeschen_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frist_erinnerung_am": {
+          "name": "frist_erinnerung_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "hinweise_kunde_id_idx": {
+          "name": "hinweise_kunde_id_idx",
+          "columns": [
+            {
+              "expression": "kunde_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hinweise_status_idx": {
+          "name": "hinweise_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "hinweise_aktenzeichen_idx": {
+          "name": "hinweise_aktenzeichen_idx",
+          "columns": [
+            {
+              "expression": "aktenzeichen",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "hinweise_kunde_id_kunden_id_fk": {
+          "name": "hinweise_kunde_id_kunden_id_fk",
+          "tableFrom": "hinweise",
+          "tableTo": "kunden",
+          "columnsFrom": [
+            "kunde_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "hinweise_aktenzeichen_unique": {
+          "name": "hinweise_aktenzeichen_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "aktenzeichen"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kunden": {
+      "name": "kunden",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "firma": {
+          "name": "firma",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "strasse": {
+          "name": "strasse",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plz": {
+          "name": "plz",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ort": {
+          "name": "ort",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telefon": {
+          "name": "telefon",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telefax": {
+          "name": "telefax",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "firmen_email": {
+          "name": "firmen_email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "logo_name": {
+          "name": "logo_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logo_url": {
+          "name": "logo_url",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kundengruppe_id": {
+          "name": "kundengruppe_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kunden_kuerzel": {
+          "name": "kunden_kuerzel",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kunden_id_display": {
+          "name": "kunden_id_display",
+          "type": "serial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "abo_modell": {
+          "name": "abo_modell",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_email": {
+          "name": "meldestelle_email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ansprechpartner": {
+          "name": "ansprechpartner",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_strasse": {
+          "name": "meldestelle_strasse",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_plz": {
+          "name": "meldestelle_plz",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_ort": {
+          "name": "meldestelle_ort",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_internetseite": {
+          "name": "meldestelle_internetseite",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_email_public": {
+          "name": "meldestelle_email_public",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "meldestelle_telefon_public": {
+          "name": "meldestelle_telefon_public",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_impressum": {
+          "name": "link_impressum",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "link_datenschutz": {
+          "name": "link_datenschutz",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "kunden_kundengruppe_id_idx": {
+          "name": "kunden_kundengruppe_id_idx",
+          "columns": [
+            {
+              "expression": "kundengruppe_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kunden_kuerzel_idx": {
+          "name": "kunden_kuerzel_idx",
+          "columns": [
+            {
+              "expression": "kunden_kuerzel",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kunden_kundengruppe_id_kundengruppen_id_fk": {
+          "name": "kunden_kundengruppe_id_kundengruppen_id_fk",
+          "tableFrom": "kunden",
+          "tableTo": "kundengruppen",
+          "columnsFrom": [
+            "kundengruppe_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kundengruppen": {
+      "name": "kundengruppen",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "kundengruppen_name_unique": {
+          "name": "kundengruppen_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.loeschprotokoll": {
+      "name": "loeschprotokoll",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "loeschprotokoll_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "aktenzeichen": {
+          "name": "aktenzeichen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kunde_id": {
+          "name": "kunde_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grund": {
+          "name": "grund",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meldung_eingegangen_am": {
+          "name": "meldung_eingegangen_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "abgeschlossen_am": {
+          "name": "abgeschlossen_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "geloescht_am": {
+          "name": "geloescht_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mitarbeiter": {
+      "name": "mitarbeiter",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kunde_id": {
+          "name": "kunde_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "anrede": {
+          "name": "anrede",
+          "type": "anrede",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vorname": {
+          "name": "vorname",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nachname": {
+          "name": "nachname",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email1": {
+          "name": "email1",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email2": {
+          "name": "email2",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telefon": {
+          "name": "telefon",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mobil": {
+          "name": "mobil",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anschrift": {
+          "name": "anschrift",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "funktion": {
+          "name": "funktion",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ist_meldestelle": {
+          "name": "ist_meldestelle",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "ist_geschaeftsfuehrer": {
+          "name": "ist_geschaeftsfuehrer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "mitarbeiter_kunde_id_idx": {
+          "name": "mitarbeiter_kunde_id_idx",
+          "columns": [
+            {
+              "expression": "kunde_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "mitarbeiter_kunde_id_kunden_id_fk": {
+          "name": "mitarbeiter_kunde_id_kunden_id_fk",
+          "tableFrom": "mitarbeiter",
+          "tableTo": "kunden",
+          "columnsFrom": [
+            "kunde_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.nachrichten": {
+      "name": "nachrichten",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "nachrichten_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "hinweis_id": {
+          "name": "hinweis_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "richtung": {
+          "name": "richtung",
+          "type": "nachricht_richtung",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inhalt": {
+          "name": "inhalt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ersteller": {
+          "name": "ersteller",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gelesen_am": {
+          "name": "gelesen_am",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "nachrichten_hinweis_id_idx": {
+          "name": "nachrichten_hinweis_id_idx",
+          "columns": [
+            {
+              "expression": "hinweis_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "nachrichten_hinweis_id_hinweise_id_fk": {
+          "name": "nachrichten_hinweis_id_hinweise_id_fk",
+          "tableFrom": "nachrichten",
+          "tableTo": "hinweise",
+          "columnsFrom": [
+            "hinweis_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.system_protokoll": {
+      "name": "system_protokoll",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "system_protokoll_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "ereignis": {
+          "name": "ereignis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "benutzer": {
+          "name": "benutzer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "kunde_id": {
+          "name": "kunde_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_username_idx": {
+          "name": "users_username_idx",
+          "columns": [
+            {
+              "expression": "username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "users_kunde_id_kunden_id_fk": {
+          "name": "users_kunde_id_kunden_id_fk",
+          "tableFrom": "users",
+          "tableTo": "kunden",
+          "columnsFrom": [
+            "kunde_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_username_unique": {
+          "name": "users_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.anrede": {
+      "name": "anrede",
+      "schema": "public",
+      "values": [
+        "Frau",
+        "Herr"
+      ]
+    },
+    "public.archiv_art": {
+      "name": "archiv_art",
+      "schema": "public",
+      "values": [
+        "Kommunikation",
+        "Mail",
+        "Log"
+      ]
+    },
+    "public.aufgabe_status": {
+      "name": "aufgabe_status",
+      "schema": "public",
+      "values": [
+        "Offen",
+        "InBearbeitung",
+        "Abgeschlossen"
+      ]
+    },
+    "public.email_richtung": {
+      "name": "email_richtung",
+      "schema": "public",
+      "values": [
+        "Eingang",
+        "Ausgang"
+      ]
+    },
+    "public.email_status": {
+      "name": "email_status",
+      "schema": "public",
+      "values": [
+        "Gesendet",
+        "Warteschlange",
+        "Fehler"
+      ]
+    },
+    "public.hinweis_status": {
+      "name": "hinweis_status",
+      "schema": "public",
+      "values": [
+        "Neu",
+        "InBearbeitung",
+        "Abgeschlossen"
+      ]
+    },
+    "public.meldeweg": {
+      "name": "meldeweg",
+      "schema": "public",
+      "values": [
+        "Hinweisgebersystem",
+        "Telefon",
+        "Email",
+        "Post"
+      ]
+    },
+    "public.nachricht_richtung": {
+      "name": "nachricht_richtung",
+      "schema": "public",
+      "values": [
+        "AnHinweisgeber",
+        "VonHinweisgeber"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "admin",
+        "user"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

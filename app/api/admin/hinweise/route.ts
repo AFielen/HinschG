@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq, ilike, or, sql, desc, asc } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { hinweise, kunden, aufgaben, archiv } from '@/lib/db/schema';
+import { eq, ilike, or, and, sql, desc, asc } from 'drizzle-orm';
+import { hinweise, kunden, aufgaben, archiv, nachrichten } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
+import { kundeScopeOf, withTenant } from '@/lib/db/tenant';
+import { decryptField, encryptField } from '@/lib/crypto';
+import { generateAktenzeichen, generateZugangscode } from '@/lib/aktenzeichen';
+import { berechneFristen } from '@/lib/fristen';
+import { hashPassword } from '@/lib/auth/password';
 
-function generateAktenzeichen(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let rand = '';
-  for (let i = 0; i < 8; i++) {
-    rand += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `${y}-${m}-${d}-${rand}`;
+const EINGANGSBESTAETIGUNG_TEXT =
+  'Ihre Meldung ist bei der Meldestelle eingegangen. Diese Nachricht bestätigt den Eingang gemäß § 17 Abs. 1 HinSchG. Sie erhalten spätestens innerhalb von drei Monaten eine Rückmeldung über geplante oder ergriffene Maßnahmen. Über dieses Postfach können Sie jederzeit Rückfragen stellen und Unterlagen nachreichen.';
+
+function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e.code === '23505' || e.cause?.code === '23505';
 }
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const url = new URL(request.url);
     const status = url.searchParams.get('status');
     const search = url.searchParams.get('search');
@@ -31,57 +32,72 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     const conditions = [];
+    if (scope !== 'all') {
+      // Defense in Depth zusätzlich zur RLS-Policy
+      conditions.push(eq(hinweise.kundeId, scope));
+    }
     if (status && ['Neu', 'InBearbeitung', 'Abgeschlossen'].includes(status)) {
       conditions.push(eq(hinweise.status, status as 'Neu' | 'InBearbeitung' | 'Abgeschlossen'));
     }
     if (search) {
+      // Suche nur über unverschlüsselte Felder (hinweisgeber* liegt als Ciphertext vor)
       conditions.push(
         or(
           ilike(hinweise.aktenzeichen, `%${search}%`),
           ilike(hinweise.meldungstext, `%${search}%`),
-          ilike(hinweise.hinweisgeberNachname, `%${search}%`),
         )!,
       );
     }
 
-    const where = conditions.length > 0
-      ? sql`${conditions.reduce((acc, cond, i) => (i === 0 ? cond : sql`${acc} AND ${cond}`))}`
-      : undefined;
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const sortCol = sortBy === 'aktenzeichen' ? hinweise.aktenzeichen
       : sortBy === 'status' ? hinweise.status
       : hinweise.createdAt;
     const orderFn = sortOrder === 'asc' ? asc : desc;
 
-    const rows = await db
-      .select({
-        id: hinweise.id,
-        aktenzeichen: hinweise.aktenzeichen,
-        status: hinweise.status,
-        istAnonym: hinweise.istAnonym,
-        kundeId: hinweise.kundeId,
-        kundeName: kunden.firma,
-        meldeweg: hinweise.meldeweg,
-        kategorie: hinweise.kategorie,
-        meldungstext: hinweise.meldungstext,
-        hinweisgeberVorname: hinweise.hinweisgeberVorname,
-        hinweisgeberNachname: hinweise.hinweisgeberNachname,
-        createdAt: hinweise.createdAt,
-        updatedAt: hinweise.updatedAt,
-      })
-      .from(hinweise)
-      .leftJoin(kunden, eq(hinweise.kundeId, kunden.id))
-      .where(where)
-      .orderBy(orderFn(sortCol))
-      .limit(limit)
-      .offset(offset);
+    const { rows, total } = await withTenant(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: hinweise.id,
+          aktenzeichen: hinweise.aktenzeichen,
+          status: hinweise.status,
+          istAnonym: hinweise.istAnonym,
+          kundeId: hinweise.kundeId,
+          kundeName: kunden.firma,
+          meldeweg: hinweise.meldeweg,
+          kategorie: hinweise.kategorie,
+          meldungstext: hinweise.meldungstext,
+          hinweisgeberVorname: hinweise.hinweisgeberVorname,
+          hinweisgeberNachname: hinweise.hinweisgeberNachname,
+          eingangsbestaetigungAm: hinweise.eingangsbestaetigungAm,
+          rueckmeldungAm: hinweise.rueckmeldungAm,
+          rueckmeldungFaelligAm: hinweise.rueckmeldungFaelligAm,
+          createdAt: hinweise.createdAt,
+          updatedAt: hinweise.updatedAt,
+        })
+        .from(hinweise)
+        .leftJoin(kunden, eq(hinweise.kundeId, kunden.id))
+        .where(where)
+        .orderBy(orderFn(sortCol))
+        .limit(limit)
+        .offset(offset);
 
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(hinweise)
-      .where(where);
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hinweise)
+        .where(where);
 
-    return NextResponse.json({ data: rows, total: count, page, limit });
+      return { rows, total: count };
+    });
+
+    const data = rows.map((row) => ({
+      ...row,
+      hinweisgeberVorname: decryptField(row.hinweisgeberVorname),
+      hinweisgeberNachname: decryptField(row.hinweisgeberNachname),
+    }));
+
+    return NextResponse.json({ data, total, page, limit });
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });
@@ -110,48 +126,111 @@ const createSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const session = await requireAuth(request);
+    const scope = kundeScopeOf(session);
     const body = await request.json();
     const data = createSchema.parse(body);
-    const aktenzeichen = generateAktenzeichen();
 
-    const [hinweis] = await db
-      .insert(hinweise)
-      .values({
-        aktenzeichen,
-        status: 'Neu',
-        istAnonym: data.istAnonym,
-        kundeId: data.kundeId,
-        meldeweg: data.meldeweg ?? 'Hinweisgebersystem',
-        kategorie: data.kategorie ?? null,
-        datumVerstoss: data.datumVerstoss ?? null,
-        beteiligte: data.beteiligte ?? null,
-        meldungstext: data.meldungstext,
-        hinweisgeberAnrede: data.istAnonym ? null : (data.hinweisgeberAnrede ?? null),
-        hinweisgeberVorname: data.istAnonym ? null : (data.hinweisgeberVorname ?? null),
-        hinweisgeberNachname: data.istAnonym ? null : (data.hinweisgeberNachname ?? null),
-        hinweisgeberTelefon: data.istAnonym ? null : (data.hinweisgeberTelefon ?? null),
-        hinweisgeberEmail: data.istAnonym ? null : (data.hinweisgeberEmail ?? null),
-        hinweisgeberAnmerkungen: data.istAnonym ? null : (data.hinweisgeberAnmerkungen ?? null),
-      })
-      .returning();
+    if (scope !== 'all' && data.kundeId !== scope) {
+      return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
+    }
 
-    await db.insert(aufgaben).values({
-      hinweisId: hinweis.id,
-      titel: 'Neue Meldung prüfen',
-      beschreibung: `Eingegangene Meldung (${aktenzeichen}) sichten und Relevanz prüfen.`,
-      status: 'Offen',
-      schritt: 1,
-      schrittName: 'Eingangsbestätigung',
-    });
+    // Zugangscode wird nur einmalig im Klartext zurückgegeben (für den Hinweisgeber)
+    const zugangscode = generateZugangscode();
+    const zugangscodeHash = await hashPassword(zugangscode);
 
-    await db.insert(archiv).values({
-      hinweisId: hinweis.id,
-      art: 'Log',
-      ersteller: session.username,
-      meldung: `Meldung manuell erstellt von ${session.username}. Aktenzeichen: ${aktenzeichen}`,
-    });
+    let hinweis: typeof hinweise.$inferSelect | null = null;
 
-    return NextResponse.json({ success: true, data: hinweis }, { status: 201 });
+    // Kollisions-Retry für das Aktenzeichen (Unique-Constraint)
+    for (let versuch = 0; versuch < 5 && !hinweis; versuch++) {
+      const aktenzeichen = generateAktenzeichen();
+      try {
+        hinweis = await withTenant(scope, async (tx) => {
+          const eingang = new Date();
+          const { eingangsbestaetigungFaelligAm, rueckmeldungFaelligAm } =
+            berechneFristen(eingang);
+
+          const [neu] = await tx
+            .insert(hinweise)
+            .values({
+              aktenzeichen,
+              status: 'Neu',
+              istAnonym: data.istAnonym,
+              kundeId: data.kundeId,
+              meldeweg: data.meldeweg ?? 'Telefon',
+              kategorie: data.kategorie ?? null,
+              datumVerstoss: data.datumVerstoss ?? null,
+              beteiligte: data.beteiligte ?? null,
+              meldungstext: data.meldungstext,
+              hinweisgeberAnrede: data.istAnonym ? null : (data.hinweisgeberAnrede ?? null),
+              hinweisgeberVorname: encryptField(data.istAnonym ? null : data.hinweisgeberVorname),
+              hinweisgeberNachname: encryptField(data.istAnonym ? null : data.hinweisgeberNachname),
+              hinweisgeberTelefon: encryptField(data.istAnonym ? null : data.hinweisgeberTelefon),
+              hinweisgeberEmail: encryptField(data.istAnonym ? null : data.hinweisgeberEmail),
+              hinweisgeberAnmerkungen: encryptField(data.istAnonym ? null : data.hinweisgeberAnmerkungen),
+              zugangscodeHash,
+              eingangsbestaetigungAm: eingang,
+              eingangsbestaetigungFaelligAm,
+              rueckmeldungFaelligAm,
+            })
+            .returning();
+
+          // Automatische Eingangsbestätigung (§ 17 Abs. 1 HinSchG)
+          await tx.insert(nachrichten).values({
+            hinweisId: neu.id,
+            richtung: 'AnHinweisgeber',
+            inhalt: EINGANGSBESTAETIGUNG_TEXT,
+            ersteller: 'System',
+          });
+
+          await tx.insert(aufgaben).values({
+            hinweisId: neu.id,
+            titel: 'Relevanzprüfung',
+            beschreibung: `Eingegangene Meldung (${aktenzeichen}) sichten und Relevanz prüfen.`,
+            status: 'Offen',
+            schritt: 1,
+            schrittName: 'Relevanzprüfung',
+            faelligBis: eingangsbestaetigungFaelligAm,
+          });
+
+          await tx.insert(archiv).values({
+            hinweisId: neu.id,
+            art: 'Log',
+            ersteller: session.username,
+            meldung: `Meldung manuell erfasst von ${session.username}. Aktenzeichen: ${aktenzeichen}`,
+          });
+
+          return neu;
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) continue;
+        throw err;
+      }
+    }
+
+    if (!hinweis) {
+      return NextResponse.json(
+        { error: 'Aktenzeichen konnte nicht eindeutig erzeugt werden. Bitte versuchen Sie es erneut.' },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        aktenzeichen: hinweis.aktenzeichen,
+        zugangscode,
+        data: {
+          ...hinweis,
+          zugangscodeHash: undefined,
+          hinweisgeberVorname: decryptField(hinweis.hinweisgeberVorname),
+          hinweisgeberNachname: decryptField(hinweis.hinweisgeberNachname),
+          hinweisgeberTelefon: decryptField(hinweis.hinweisgeberTelefon),
+          hinweisgeberEmail: decryptField(hinweis.hinweisgeberEmail),
+          hinweisgeberAnmerkungen: decryptField(hinweis.hinweisgeberAnmerkungen),
+        },
+      },
+      { status: 201 },
+    );
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
       return NextResponse.json({ error: 'Nicht authentifiziert' }, { status: 401 });

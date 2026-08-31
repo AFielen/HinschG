@@ -86,8 +86,10 @@ export default function MeldestellePage() {
               preiszugeben.
             </p>
             <p className="text-[0.85rem]" style={{ color: '#6b7280' }}>
-              Bitte beachten Sie, dass bei einer anonymen Meldung keine Rückfragen möglich sind.
-              Beschreiben Sie den Sachverhalt daher so detailliert wie möglich.
+              Auch bei einer anonymen Meldung erhalten Sie ein Aktenzeichen und einen
+              Zugangscode. Damit können Sie über das anonyme Postfach Rückfragen der
+              Meldestelle beantworten und den Bearbeitungsstand verfolgen — Ihre
+              Anonymität bleibt dabei gewahrt.
             </p>
             <div className="pt-2">
               <Link
@@ -96,6 +98,33 @@ export default function MeldestellePage() {
                 style={{ background: '#4a7a9b', minHeight: '44px' }}
               >
                 Meldung starten
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </AccordionItem>
+
+        <AccordionItem title="&#128236; Postfach &mdash; Status Ihrer Meldung">
+          <div className="space-y-3">
+            <p className="text-[0.9rem] leading-relaxed" style={{ color: '#4a5568' }}>
+              Sie haben bereits eine Meldung abgegeben? Mit Ihrem Aktenzeichen und Ihrem
+              Zugangscode können Sie sich im Postfach anmelden, den Bearbeitungsstand
+              einsehen, Nachrichten der Meldestelle lesen und Rückfragen beantworten &mdash;
+              auch bei anonymen Meldungen.
+            </p>
+            <p className="text-[0.85rem]" style={{ color: '#6b7280' }}>
+              Aktenzeichen und Zugangscode wurden Ihnen einmalig nach dem Absenden Ihrer
+              Meldung angezeigt.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/meldestelle/postfach"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors"
+                style={{ background: '#4a7a9b', minHeight: '44px' }}
+              >
+                Zum Postfach
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>

@@ -45,6 +45,7 @@ export default function AnonymPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [aktenzeichen, setAktenzeichen] = useState('');
+  const [zugangscode, setZugangscode] = useState('');
   const [error, setError] = useState('');
 
   function update(field: keyof FormData, value: string) {
@@ -80,6 +81,7 @@ export default function AnonymPage() {
       }
       const data = await res.json();
       setAktenzeichen(data.aktenzeichen ?? '');
+      setZugangscode(data.zugangscode ?? '');
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ein unbekannter Fehler ist aufgetreten');
@@ -106,23 +108,58 @@ export default function AnonymPage() {
               Es wurden keine persönlichen Daten erfasst.
             </p>
             {aktenzeichen && (
-              <div className="rounded-lg p-4 mt-4" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-                <p className="text-sm font-semibold" style={{ color: '#0369a1' }}>
-                  Ihr Aktenzeichen:
-                </p>
-                <p className="text-lg font-bold font-mono mt-1" style={{ color: '#0c4a6e' }}>
-                  {aktenzeichen}
-                </p>
-                <p className="text-xs mt-2" style={{ color: '#6b7280' }}>
-                  Bitte notieren Sie sich dieses Aktenzeichen für eventuelle Rückfragen.
+              <div className="rounded-lg p-5 mt-4 text-left" style={{ background: '#fffbeb', border: '2px solid #f59e0b' }}>
+                <div className="flex items-start gap-2 mb-4">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                  <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
+                    Notieren Sie Aktenzeichen und Zugangscode jetzt — sie werden aus
+                    Sicherheitsgründen nur EINMAL angezeigt und können nicht
+                    wiederhergestellt werden.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#92400e' }}>
+                      Aktenzeichen
+                    </p>
+                    <p className="text-lg font-bold font-mono mt-1 break-all" style={{ color: '#212529' }}>
+                      {aktenzeichen}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#92400e' }}>
+                      Zugangscode
+                    </p>
+                    <p className="text-lg font-bold font-mono mt-1 break-all" style={{ color: '#212529' }}>
+                      {zugangscode}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs mt-4" style={{ color: '#6b7280' }}>
+                  Mit diesen Angaben können Sie sich jederzeit anonym im{' '}
+                  <Link href="/meldestelle/postfach" className="underline font-semibold" style={{ color: '#4a7a9b' }}>
+                    Postfach
+                  </Link>{' '}
+                  anmelden, den Bearbeitungsstand einsehen, Rückfragen beantworten und
+                  Unterlagen nachreichen — Ihre Anonymität bleibt dabei gewahrt.
                 </p>
               </div>
             )}
-            <div className="pt-4">
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
               <Link
-                href="/meldestelle"
+                href="/meldestelle/postfach"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors"
                 style={{ background: '#4a7a9b', minHeight: '44px' }}
+              >
+                Zum Postfach
+              </Link>
+              <Link
+                href="/meldestelle"
+                className="drk-btn-secondary inline-flex items-center justify-center gap-2"
               >
                 Zurück zur Startseite
               </Link>
@@ -142,8 +179,9 @@ export default function AnonymPage() {
         </svg>
         <p className="text-sm" style={{ color: 'rgba(255,255,255,0.9)' }}>
           <span className="font-semibold">Anonyme Meldung:</span> Es werden keine persönlichen Daten
-          erfasst. Ihre Identität bleibt vollständig unbekannt. Bitte beschreiben Sie den
-          Sachverhalt daher so detailliert wie möglich.
+          erfasst. Ihre Identität bleibt vollständig unbekannt. Über das anonyme Postfach können
+          Sie nach dem Absenden dennoch Rückfragen der Meldestelle beantworten und den
+          Bearbeitungsstand verfolgen.
         </p>
       </div>
 
@@ -221,8 +259,8 @@ export default function AnonymPage() {
               Meldung erfassen
             </h2>
             <p className="text-[0.85rem]" style={{ color: '#6b7280' }}>
-              Beschreiben Sie den Sachverhalt so detailliert wie möglich. Da es sich um eine anonyme
-              Meldung handelt, können wir keine Rückfragen stellen.
+              Beschreiben Sie den Sachverhalt so detailliert wie möglich. Rückfragen der
+              Meldestelle können Sie später anonym über das Postfach beantworten.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

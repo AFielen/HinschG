@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { db } from '@/lib/db';
-import { hinweise, aufgaben, archiv } from '@/lib/db/schema';
+import { hinweise, aufgaben, archiv, nachrichten } from '@/lib/db/schema';
+import { withTenant } from '@/lib/db/tenant';
+import { generateAktenzeichen, generateZugangscode } from '@/lib/aktenzeichen';
+import { berechneFristen } from '@/lib/fristen';
+import { encryptField } from '@/lib/crypto';
+import { hashPassword } from '@/lib/auth/password';
 import { rateLimit } from '@/lib/rate-limit';
 
-function generateAktenzeichen(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let rand = '';
-  for (let i = 0; i < 8; i++) {
-    rand += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `${y}-${m}-${d}-${rand}`;
-}
+const EINGANGSBESTAETIGUNG_TEXT =
+  'Ihre Meldung ist bei der Meldestelle eingegangen. Diese Nachricht bestätigt den Eingang gemäß § 17 Abs. 1 HinSchG. Sie erhalten spätestens innerhalb von drei Monaten eine Rückmeldung über geplante oder ergriffene Maßnahmen. Über dieses Postfach können Sie jederzeit Rückfragen stellen und Unterlagen nachreichen.';
+
+const MAX_AKTENZEICHEN_VERSUCHE = 5;
 
 const hinweisSchema = z.object({
   istAnonym: z.boolean().default(false),
@@ -39,6 +35,18 @@ const hinweisSchema = z.object({
   hinweisgeberAnmerkungen: z.string().max(2000).optional(),
 });
 
+/** Erkennt eine Unique-Constraint-Verletzung (PostgreSQL-Fehlercode 23505). */
+function istUniqueVerletzung(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  if ((err as { code?: unknown }).code === '23505') return true;
+  const cause = (err as { cause?: unknown }).cause;
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    (cause as { code?: unknown }).code === '23505'
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Rate-Limit: 5 Meldungen / Stunde pro IP
@@ -61,46 +69,95 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = hinweisSchema.parse(body);
-    const aktenzeichen = generateAktenzeichen();
 
-    const [hinweis] = await db
-      .insert(hinweise)
-      .values({
-        aktenzeichen,
-        status: 'Neu',
-        istAnonym: data.istAnonym,
-        kundeId: data.kundeId,
-        meldeweg: data.meldeweg,
-        kategorie: data.kategorie ?? null,
-        datumVerstoss: data.datumVerstoss ?? null,
-        beteiligte: data.beteiligte ?? null,
-        meldungstext: data.meldungstext,
-        hinweisgeberAnrede: data.istAnonym ? null : (data.hinweisgeberAnrede ?? null),
-        hinweisgeberVorname: data.istAnonym ? null : (data.hinweisgeberVorname ?? null),
-        hinweisgeberNachname: data.istAnonym ? null : (data.hinweisgeberNachname ?? null),
-        hinweisgeberTelefon: data.istAnonym ? null : (data.hinweisgeberTelefon ?? null),
-        hinweisgeberEmail: data.istAnonym ? null : (data.hinweisgeberEmail || null),
-        hinweisgeberAnmerkungen: data.istAnonym ? null : (data.hinweisgeberAnmerkungen ?? null),
-      })
-      .returning();
+    // Zugangscode wird NUR hier einmalig erzeugt und ausgegeben —
+    // gespeichert wird ausschließlich der bcrypt-Hash.
+    const zugangscode = generateZugangscode();
+    const zugangscodeHash = await hashPassword(zugangscode);
 
-    await db.insert(aufgaben).values({
-      hinweisId: hinweis.id,
-      titel: 'Neue Meldung prüfen',
-      beschreibung: `Eingegangene Meldung (${aktenzeichen}) sichten und Relevanz prüfen.`,
-      status: 'Offen',
-      schritt: 1,
-      schrittName: 'Eingangsbestätigung',
-    });
+    const now = new Date();
+    const { eingangsbestaetigungFaelligAm, rueckmeldungFaelligAm } =
+      berechneFristen(now);
 
-    await db.insert(archiv).values({
-      hinweisId: hinweis.id,
-      art: 'Log',
-      ersteller: 'System',
-      meldung: `Meldung eingegangen über ${data.meldeweg}. Aktenzeichen: ${aktenzeichen}`,
-    });
+    // Aktenzeichen mit Kollisions-Retry (max 5 Versuche, bei
+    // Unique-Verletzung wird neu gewürfelt)
+    let aktenzeichen = '';
+    let gespeichert = false;
 
-    return NextResponse.json({ success: true, aktenzeichen }, { status: 201 });
+    for (
+      let versuch = 0;
+      versuch < MAX_AKTENZEICHEN_VERSUCHE && !gespeichert;
+      versuch++
+    ) {
+      aktenzeichen = generateAktenzeichen();
+      try {
+        await withTenant('all', async (tx) => {
+          const [hinweis] = await tx
+            .insert(hinweise)
+            .values({
+              aktenzeichen,
+              status: 'Neu',
+              istAnonym: data.istAnonym,
+              kundeId: data.kundeId,
+              meldeweg: data.meldeweg,
+              kategorie: data.kategorie ?? null,
+              datumVerstoss: data.datumVerstoss ?? null,
+              beteiligte: data.beteiligte ?? null,
+              meldungstext: data.meldungstext,
+              // PII verschlüsselt (AES-256-GCM), bei anonymer Meldung alles null
+              hinweisgeberAnrede: data.istAnonym ? null : (data.hinweisgeberAnrede ?? null),
+              hinweisgeberVorname: data.istAnonym ? null : encryptField(data.hinweisgeberVorname),
+              hinweisgeberNachname: data.istAnonym ? null : encryptField(data.hinweisgeberNachname),
+              hinweisgeberTelefon: data.istAnonym ? null : encryptField(data.hinweisgeberTelefon),
+              hinweisgeberEmail: data.istAnonym ? null : encryptField(data.hinweisgeberEmail || null),
+              hinweisgeberAnmerkungen: data.istAnonym ? null : encryptField(data.hinweisgeberAnmerkungen),
+              zugangscodeHash,
+              // Fristen nach HinSchG + automatische Eingangsbestätigung
+              eingangsbestaetigungAm: now,
+              eingangsbestaetigungFaelligAm,
+              rueckmeldungFaelligAm,
+            })
+            .returning();
+
+          // Auto-Eingangsbestätigung (§ 17 Abs. 1 HinSchG) ins Postfach
+          await tx.insert(nachrichten).values({
+            hinweisId: hinweis.id,
+            richtung: 'AnHinweisgeber',
+            inhalt: EINGANGSBESTAETIGUNG_TEXT,
+            ersteller: 'System',
+          });
+
+          await tx.insert(aufgaben).values({
+            hinweisId: hinweis.id,
+            titel: 'Relevanzprüfung',
+            beschreibung: `Eingegangene Meldung (${aktenzeichen}) sichten und Relevanz prüfen.`,
+            status: 'Offen',
+            schritt: 1,
+            schrittName: 'Eingangsbestätigung',
+            faelligBis: eingangsbestaetigungFaelligAm,
+          });
+
+          await tx.insert(archiv).values({
+            hinweisId: hinweis.id,
+            art: 'Log',
+            ersteller: 'System',
+            meldung: `Meldung eingegangen über ${data.meldeweg}. Aktenzeichen: ${aktenzeichen}`,
+          });
+        });
+        gespeichert = true;
+      } catch (err) {
+        if (istUniqueVerletzung(err) && versuch < MAX_AKTENZEICHEN_VERSUCHE - 1) {
+          continue; // Aktenzeichen-Kollision → neu würfeln
+        }
+        throw err;
+      }
+    }
+
+    // Zugangscode wird NUR in dieser Response einmalig ausgegeben
+    return NextResponse.json(
+      { success: true, aktenzeichen, zugangscode },
+      { status: 201 },
+    );
   } catch (err) {
     if (err instanceof z.ZodError) {
       // Bewusst keine Details an den Client (öffentlicher Endpunkt)

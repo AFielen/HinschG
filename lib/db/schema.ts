@@ -54,6 +54,11 @@ export const emailStatusEnum = pgEnum('email_status', [
   'Fehler',
 ]);
 
+export const nachrichtRichtungEnum = pgEnum('nachricht_richtung', [
+  'AnHinweisgeber',
+  'VonHinweisgeber',
+]);
+
 // ── Timestamps (wiederverwendbar) ──────────────────────────────────────────
 
 const timestamps = {
@@ -78,6 +83,8 @@ export const users = pgTable(
     email: varchar('email', { length: 255 }),
     role: userRoleEnum('role').default('user').notNull(),
     active: boolean('active').default(true).notNull(),
+    // null = zentraler Zugriff auf alle Mandanten
+    kundeId: integer('kunde_id').references(() => kunden.id),
     ...timestamps,
   },
   (table) => [index('users_username_idx').on(table.username)],
@@ -186,12 +193,31 @@ export const hinweise = pgTable(
     beteiligte: text('beteiligte'),
     meldungstext: text('meldungstext'),
 
+    // Hinweisgeber-PII: verschlüsselt gespeichert (lib/crypto.ts, AES-256-GCM)
     hinweisgeberAnrede: anredeEnum('hinweisgeber_anrede'),
-    hinweisgeberVorname: varchar('hinweisgeber_vorname', { length: 255 }),
-    hinweisgeberNachname: varchar('hinweisgeber_nachname', { length: 255 }),
-    hinweisgeberTelefon: varchar('hinweisgeber_telefon', { length: 50 }),
-    hinweisgeberEmail: varchar('hinweisgeber_email', { length: 255 }),
+    hinweisgeberVorname: text('hinweisgeber_vorname'),
+    hinweisgeberNachname: text('hinweisgeber_nachname'),
+    hinweisgeberTelefon: text('hinweisgeber_telefon'),
+    hinweisgeberEmail: text('hinweisgeber_email'),
     hinweisgeberAnmerkungen: text('hinweisgeber_anmerkungen'),
+
+    // Postfach-Zugang (bcrypt-Hash des Zugangscodes)
+    zugangscodeHash: text('zugangscode_hash'),
+
+    // Fristen nach HinSchG
+    eingangsbestaetigungAm: timestamp('eingangsbestaetigung_am', {
+      withTimezone: true,
+    }),
+    eingangsbestaetigungFaelligAm: timestamp('eingangsbestaetigung_faellig_am', {
+      withTimezone: true,
+    }),
+    rueckmeldungAm: timestamp('rueckmeldung_am', { withTimezone: true }),
+    rueckmeldungFaelligAm: timestamp('rueckmeldung_faellig_am', {
+      withTimezone: true,
+    }),
+    abgeschlossenAm: timestamp('abgeschlossen_am', { withTimezone: true }),
+    loeschenAm: timestamp('loeschen_am', { withTimezone: true }),
+    fristErinnerungAm: timestamp('frist_erinnerung_am', { withTimezone: true }),
 
     ...timestamps,
   },
@@ -304,6 +330,54 @@ export const emails = pgTable(
   ],
 );
 
+// ── Nachrichten (Postfach-Kommunikation mit Hinweisgeber) ──────────────────
+
+export const nachrichten = pgTable(
+  'nachrichten',
+  {
+    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    hinweisId: integer('hinweis_id')
+      .references(() => hinweise.id)
+      .notNull(),
+    richtung: nachrichtRichtungEnum('richtung').notNull(),
+    inhalt: text('inhalt').notNull(),
+    ersteller: text('ersteller').notNull(),
+    gelesenAm: timestamp('gelesen_am', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index('nachrichten_hinweis_id_idx').on(table.hinweisId)],
+);
+
+// ── Löschprotokoll (§ 11 Abs. 5 HinSchG – KEIN Fallinhalt) ─────────────────
+
+export const loeschprotokoll = pgTable('loeschprotokoll', {
+  id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+  aktenzeichen: text('aktenzeichen').notNull(),
+  kundeId: integer('kunde_id'),
+  grund: text('grund').notNull(),
+  meldungEingegangenAm: timestamp('meldung_eingegangen_am', {
+    withTimezone: true,
+  }),
+  abgeschlossenAm: timestamp('abgeschlossen_am', { withTimezone: true }),
+  geloeschtAm: timestamp('geloescht_am', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// ── System-Protokoll ───────────────────────────────────────────────────────
+
+export const systemProtokoll = pgTable('system_protokoll', {
+  id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+  ereignis: text('ereignis').notNull(),
+  benutzer: text('benutzer'),
+  details: text('details'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // ── Relations ──────────────────────────────────────────────────────────────
 
 export const kundengruppenRelations = relations(kundengruppen, ({ many }) => ({
@@ -334,6 +408,14 @@ export const hinweiseRelations = relations(hinweise, ({ one, many }) => ({
   aufgaben: many(aufgaben),
   archivEintraege: many(archiv),
   emails: many(emails),
+  nachrichten: many(nachrichten),
+}));
+
+export const nachrichtenRelations = relations(nachrichten, ({ one }) => ({
+  hinweis: one(hinweise, {
+    fields: [nachrichten.hinweisId],
+    references: [hinweise.id],
+  }),
 }));
 
 export const aufgabenRelations = relations(aufgaben, ({ one }) => ({
@@ -354,8 +436,12 @@ export const archivRelations = relations(archiv, ({ one }) => ({
   }),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   aufgaben: many(aufgaben),
+  kunde: one(kunden, {
+    fields: [users.kundeId],
+    references: [kunden.id],
+  }),
 }));
 
 export const emailKontenRelations = relations(emailKonten, ({ many }) => ({

@@ -2,10 +2,28 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { users, systemProtokoll } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { createToken } from '@/lib/auth/jwt';
 import { rateLimit } from '@/lib/rate-limit';
+
+/** Protokolliert einen Anmeldevorgang (ohne Passwort, ohne IP). */
+async function protokolliere(
+  ereignis: 'Login' | 'Login fehlgeschlagen',
+  benutzer: string,
+  details?: string,
+): Promise<void> {
+  try {
+    await db.insert(systemProtokoll).values({
+      ereignis,
+      benutzer,
+      details: details ?? null,
+    });
+  } catch (err) {
+    // Protokollfehler dürfen die Anmeldung nicht verhindern
+    console.error('systemProtokoll insert error:', err);
+  }
+}
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Benutzername ist erforderlich'),
@@ -51,6 +69,11 @@ export async function POST(request: Request) {
       .limit(1);
 
     if (!user || !user.active) {
+      await protokolliere(
+        'Login fehlgeschlagen',
+        username,
+        user ? 'Konto deaktiviert' : 'Benutzer unbekannt',
+      );
       return NextResponse.json(
         { error: 'Benutzername oder Kennwort ungültig' },
         { status: 401 },
@@ -59,6 +82,7 @@ export async function POST(request: Request) {
 
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
+      await protokolliere('Login fehlgeschlagen', username, 'Kennwort falsch');
       return NextResponse.json(
         { error: 'Benutzername oder Kennwort ungültig' },
         { status: 401 },
@@ -69,7 +93,10 @@ export async function POST(request: Request) {
       userId: user.id,
       username: user.username,
       role: user.role,
+      kundeId: user.kundeId,
     });
+
+    await protokolliere('Login', user.username);
 
     const response = NextResponse.json({
       user: {
