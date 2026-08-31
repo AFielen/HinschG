@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { hinweise, aufgaben, archiv } from '@/lib/db/schema';
+import { rateLimit } from '@/lib/rate-limit';
 
 function generateAktenzeichen(): string {
   const now = new Date();
@@ -20,20 +21,44 @@ const hinweisSchema = z.object({
   istAnonym: z.boolean().default(false),
   kundeId: z.number({ coerce: true }),
   meldeweg: z.enum(['Hinweisgebersystem', 'Telefon', 'Email', 'Post']).default('Hinweisgebersystem'),
-  kategorie: z.string().optional(),
-  datumVerstoss: z.string().optional(),
-  beteiligte: z.string().optional(),
-  meldungstext: z.string().min(1, 'Bitte geben Sie einen Meldungstext ein.'),
+  kategorie: z.string().max(255).optional(),
+  datumVerstoss: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format JJJJ-MM-TT vorliegen.')
+    .optional(),
+  beteiligte: z.string().max(5000).optional(),
+  meldungstext: z
+    .string()
+    .min(10, 'Bitte geben Sie einen Meldungstext ein (mindestens 10 Zeichen).')
+    .max(50000),
   hinweisgeberAnrede: z.enum(['Frau', 'Herr']).optional(),
-  hinweisgeberVorname: z.string().optional(),
-  hinweisgeberNachname: z.string().optional(),
-  hinweisgeberTelefon: z.string().optional(),
-  hinweisgeberEmail: z.string().optional(),
-  hinweisgeberAnmerkungen: z.string().optional(),
+  hinweisgeberVorname: z.string().max(200).optional(),
+  hinweisgeberNachname: z.string().max(200).optional(),
+  hinweisgeberTelefon: z.string().max(50).optional(),
+  hinweisgeberEmail: z.string().email().max(320).optional().or(z.literal('')),
+  hinweisgeberAnmerkungen: z.string().max(2000).optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate-Limit: 5 Meldungen / Stunde pro IP
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
+    const limit = rateLimit(`hinweis:${ip}`, {
+      limit: 5,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Zu viele Meldungen in kurzer Zeit. Bitte versuchen Sie es später erneut.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        },
+      );
+    }
+
     const body = await request.json();
     const data = hinweisSchema.parse(body);
     const aktenzeichen = generateAktenzeichen();
@@ -54,7 +79,7 @@ export async function POST(request: NextRequest) {
         hinweisgeberVorname: data.istAnonym ? null : (data.hinweisgeberVorname ?? null),
         hinweisgeberNachname: data.istAnonym ? null : (data.hinweisgeberNachname ?? null),
         hinweisgeberTelefon: data.istAnonym ? null : (data.hinweisgeberTelefon ?? null),
-        hinweisgeberEmail: data.istAnonym ? null : (data.hinweisgeberEmail ?? null),
+        hinweisgeberEmail: data.istAnonym ? null : (data.hinweisgeberEmail || null),
         hinweisgeberAnmerkungen: data.istAnonym ? null : (data.hinweisgeberAnmerkungen ?? null),
       })
       .returning();
@@ -78,7 +103,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, aktenzeichen }, { status: 201 });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Ungültige Eingabe', details: err.errors }, { status: 400 });
+      // Bewusst keine Details an den Client (öffentlicher Endpunkt)
+      return NextResponse.json(
+        { error: 'Ungültige Eingabe. Bitte prüfen Sie Ihre Angaben.' },
+        { status: 400 },
+      );
     }
     console.error('POST /api/public/hinweis error:', err);
     return NextResponse.json({ error: 'Interner Serverfehler' }, { status: 500 });

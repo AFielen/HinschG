@@ -1,3 +1,6 @@
 hinweisgebersystem.drk-aachen.de {
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains"
+    }
     reverse_proxy app:3000
 }

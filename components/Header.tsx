@@ -14,9 +14,9 @@ export default function Header() {
       <Link href="/" className="flex items-center gap-3 min-w-0" aria-label="Zur Startseite">
         <Image src="/logo.png" alt="DRK Logo" width={42} height={42} priority className="flex-shrink-0" />
         <div className="min-w-0">
-          <h1 className="text-[1.1rem] sm:text-[1.4rem] font-bold leading-tight truncate">APP_TITEL</h1>
-          <div className="text-[0.8rem] opacity-85 hidden sm:block">APP_UNTERTITEL</div>
-          <div className="text-[0.8rem] opacity-85 sm:hidden truncate">APP_UNTERTITEL_KURZ</div>
+          <h1 className="text-[1.1rem] sm:text-[1.4rem] font-bold leading-tight truncate">Hinweisgebersystem</h1>
+          <div className="text-[0.8rem] opacity-85 hidden sm:block">DRK Meldestelle nach HinSchG</div>
+          <div className="text-[0.8rem] opacity-85 sm:hidden truncate">Meldestelle</div>
         </div>
       </Link>
 

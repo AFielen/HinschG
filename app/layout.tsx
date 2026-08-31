@@ -5,8 +5,9 @@ import Header from '@/components/Header';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'DRK APP_TITEL',
-  description: 'APP_BESCHREIBUNG – DRK Kreisverband StädteRegion Aachen e.V.',
+  title: 'DRK Hinweisgebersystem',
+  description:
+    'Digitale Meldestelle nach dem Hinweisgeberschutzgesetz (HinSchG) – DRK Kreisverband StädteRegion Aachen e.V.',
   icons: { icon: '/favicon.svg' },
 };
 

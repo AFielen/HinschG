@@ -79,6 +79,23 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    label: 'Benutzer',
+    href: '/admin/benutzer',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7" r="4" />
+        <path d="M2 21v-2a4 4 0 0 1 4-4h6" />
+        <circle cx="19" cy="16" r="3" />
+        <path d="M19 11.5v1" />
+        <path d="M19 19.5v1" />
+        <path d="M22.9 13.75l-.87.5" />
+        <path d="M15.97 17.75l-.87.5" />
+        <path d="M22.9 18.25l-.87-.5" />
+        <path d="M15.97 14.25l-.87-.5" />
+      </svg>
+    ),
+  },
+  {
     label: 'Meldestelle',
     href: '/meldestelle',
     icon: (

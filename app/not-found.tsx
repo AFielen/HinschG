@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Seite nicht gefunden – DRK APP_TITEL',
+  title: 'Seite nicht gefunden – DRK Hinweisgebersystem',
 };
 
 export default function NotFound() {

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Unterstützen – DRK APP_TITEL',
+  title: 'Unterstützen – DRK Hinweisgebersystem',
   description: 'Unterstützen Sie das Deutsche Rote Kreuz mit einer Spende.',
 };
 

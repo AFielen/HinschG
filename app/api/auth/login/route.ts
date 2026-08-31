@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { createToken } from '@/lib/auth/jwt';
+import { rateLimit } from '@/lib/rate-limit';
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Benutzername ist erforderlich'),
@@ -24,6 +25,24 @@ export async function POST(request: Request) {
     }
 
     const { username, password } = parsed.data;
+
+    // Rate-Limit: 5 Versuche / 15 Minuten pro IP+Benutzername
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      'unknown';
+    const limit = rateLimit(`${ip}:${username}`, {
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: 'Zu viele Anmeldeversuche. Bitte versuchen Sie es später erneut.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+        },
+      );
+    }
 
     const [user] = await db
       .select()

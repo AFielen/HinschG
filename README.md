@@ -26,6 +26,7 @@ Entwickelt für den DRK Kreisverband StädteRegion Aachen e.V. als gemeinsame in
 * **Workflow-System** — Relevanzprüfung, Aufgabenzuweisung, Bearbeitungsschritte
 * **Kunden-Verwaltung** — Organisationen, Kundengruppen, Mitarbeiter-Übersicht
 * **E-Mail-System** — Posteingang, Versand, Vorlagen-Verwaltung
+* **Benutzerverwaltung** — Bearbeiter-Accounts anlegen, deaktivieren, Rollen zuweisen
 * **Archiv & Protokoll** — Lückenlose Dokumentation aller Bearbeitungsschritte
 
 ### 🏗️ Technisch
@@ -57,7 +58,13 @@ npm run db:push    # Schema in DB anlegen
 npm run dev        # Dev-Server starten
 ```
 
-Nach dem ersten Start: `POST /api/admin/seed` aufrufen, um den Admin-User anzulegen (admin / admin123).
+Nach dem ersten Start den Admin-User anlegen (nur möglich, solange noch keine Benutzer existieren):
+
+```bash
+curl -X POST http://localhost:3000/api/admin/seed -H "x-setup-token: <SETUP_TOKEN>"
+```
+
+Der Wert muss mit der Umgebungsvariable `SETUP_TOKEN` übereinstimmen. Die Antwort enthält das einmalig generierte Admin-Passwort — sicher notieren, es wird nicht erneut angezeigt.
 
 ## 🛠️ Tech-Stack
 
@@ -114,7 +121,9 @@ HinschG/
 * **Verschlüsselte Übertragung** — TLS via Caddy/Let's Encrypt
 * **Gehashte Passwörter** — bcrypt mit 12 Runden
 * **HttpOnly Cookies** — Session-Token nicht per JavaScript auslesbar
-* **Security Headers** — X-Frame-Options, CSP, Referrer-Policy
+* **Security Headers** — Content-Security-Policy, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+* **Rate-Limiting** — Begrenzung von Login-Versuchen und Meldungsabgaben
+* **Geschützter Seed** — Ersteinrichtung nur mit `SETUP_TOKEN`, generiertes Zufallspasswort statt Standard-Zugangsdaten
 * **Open Source** — Vollständig auditierbar
 
 ## 🤝 Beitragen

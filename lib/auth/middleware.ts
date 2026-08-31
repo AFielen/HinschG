@@ -23,3 +23,14 @@ export async function requireAuth(request: NextRequest): Promise<JwtPayload> {
   }
   return session;
 }
+
+export async function requireRole(
+  request: NextRequest,
+  role: 'admin',
+): Promise<JwtPayload> {
+  const session = await requireAuth(request);
+  if (session.role !== role) {
+    throw new Error('Keine Berechtigung');
+  }
+  return session;
+}

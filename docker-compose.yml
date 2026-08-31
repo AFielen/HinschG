@@ -1,17 +1,18 @@
 services:
   app:
     build: .
-    ports:
-      - "3000:3000"
     environment:
       DATABASE_URL: postgresql://drk:${DB_PASSWORD}@db:5432/hinweisgebersystem
       JWT_SECRET: ${JWT_SECRET}
+      SETUP_TOKEN: ${SETUP_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       MAILJET_API_KEY: ${MAILJET_API_KEY}
       MAILJET_SECRET_KEY: ${MAILJET_SECRET_KEY}
       MAIL_FROM: ${MAIL_FROM}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   db:
@@ -22,6 +23,11 @@ services:
       POSTGRES_USER: drk
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: hinweisgebersystem
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drk -d hinweisgebersystem"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   caddy:

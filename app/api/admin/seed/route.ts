@@ -1,11 +1,30 @@
-import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
+import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { users, kundengruppen } from '@/lib/db/schema';
+import { hashPassword } from '@/lib/auth/password';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    const setupToken = process.env.SETUP_TOKEN;
+    if (!setupToken) {
+      return NextResponse.json(
+        {
+          error:
+            'Seed ist nicht konfiguriert. Bitte die Umgebungsvariable SETUP_TOKEN setzen.',
+        },
+        { status: 503 },
+      );
+    }
+
+    if (request.headers.get('x-setup-token') !== setupToken) {
+      return NextResponse.json(
+        { error: 'Ungültiger oder fehlender Setup-Token' },
+        { status: 401 },
+      );
+    }
+
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(users);
@@ -17,7 +36,10 @@ export async function POST() {
       );
     }
 
-    const passwordHash = await bcrypt.hash('admin123', 12);
+    // Zufälliges Initialpasswort — wird EINMALIG im Response zurückgegeben
+    const initialPassword = crypto.randomBytes(12).toString('base64url');
+    const passwordHash = await hashPassword(initialPassword);
+
     const [adminUser] = await db
       .insert(users)
       .values({
@@ -46,8 +68,13 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: 'Seed erfolgreich ausgeführt',
-      admin: { id: adminUser.id, username: adminUser.username },
+      message:
+        'Seed erfolgreich ausgeführt. Das Admin-Passwort wird nur dieses eine Mal angezeigt — bitte sicher verwahren.',
+      admin: {
+        id: adminUser.id,
+        username: adminUser.username,
+        initialPassword,
+      },
       kundengruppen: gruppen.map((g) => g.name),
     }, { status: 201 });
   } catch (err) {

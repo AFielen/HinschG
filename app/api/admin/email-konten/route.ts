@@ -4,10 +4,22 @@ import { db } from '@/lib/db';
 import { emailKonten } from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/middleware';
 
+// smtpPassEncrypted wird bewusst NIE an den Client gegeben
+const safeKontoColumns = {
+  id: emailKonten.id,
+  name: emailKonten.name,
+  email: emailKonten.email,
+  smtpHost: emailKonten.smtpHost,
+  smtpPort: emailKonten.smtpPort,
+  smtpUser: emailKonten.smtpUser,
+  active: emailKonten.active,
+  createdAt: emailKonten.createdAt,
+};
+
 export async function GET(request: NextRequest) {
   try {
     await requireAuth(request);
-    const rows = await db.select().from(emailKonten);
+    const rows = await db.select(safeKontoColumns).from(emailKonten);
     return NextResponse.json(rows);
   } catch (err) {
     if (err instanceof Error && err.message === 'Nicht authentifiziert') {
@@ -37,7 +49,7 @@ export async function POST(request: NextRequest) {
     const [row] = await db
       .insert(emailKonten)
       .values(data)
-      .returning();
+      .returning(safeKontoColumns);
 
     return NextResponse.json({ success: true, data: row }, { status: 201 });
   } catch (err) {

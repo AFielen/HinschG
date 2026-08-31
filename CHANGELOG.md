@@ -9,6 +9,23 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 ### Added
 
 - `AUDIT.md` — vollständiger Audit-Bericht (Bestandsaufnahme, HinSchG-/DSGVO-/Sicherheits-Befunde, Roadmap in 4 Phasen)
+- `lib/rate-limit.ts` — In-Memory-Rate-Limiter (Sliding Window); aktiv auf Login (5/15 Min) und öffentlicher Meldungsabgabe (5/Std)
+- Benutzerverwaltung: API `/api/admin/users`, `/api/admin/users/[id]`, `/api/admin/me/password` (nur Rolle `admin` bzw. eigenes Passwort) und Admin-Seite `/admin/benutzer` inkl. „Eigenes Passwort ändern"
+- `requireRole()` in `lib/auth/middleware.ts` für rollenbasierte API-Autorisierung
+- Security-Header: Content-Security-Policy und Strict-Transport-Security (Production) in `middleware.ts`; HSTS zusätzlich im `Caddyfile`
+- `.dockerignore`; `.env.example` um `DB_PASSWORD`, `SETUP_TOKEN`, `ENCRYPTION_KEY` ergänzt
+
+### Changed
+
+- `middleware.ts` schützt jetzt auch `/api/admin/*` (401 JSON; Ausnahme: selbstgeschützte Seed-Route)
+- `app/api/admin/seed/route.ts`: Setup nur noch mit Header `x-setup-token` (Env `SETUP_TOKEN`); Admin-Passwort wird kryptografisch generiert und einmalig zurückgegeben — `admin123` entfernt
+- `app/api/public/hinweis/route.ts`: Zod-Validierung gehärtet (Längen-/Formatgrenzen), keine Validierungsdetails mehr im Fehler-Response
+- `app/api/admin/email-konten`: SMTP-Passwort wird nicht mehr an den Client ausgegeben
+- `app/datenschutz/page.tsx` vollständig neu — wahrheitsgemäß für das Hinweisgebersystem (HinSchG-Rechtsgrundlagen, Session-Cookie, 3-Jahres-Löschfrist, Hetzner/Mailjet)
+- `app/page.tsx` (echte Startseite mit Link zur Meldestelle), `app/hilfe/page.tsx` (echte FAQ), `components/Header.tsx` + alle Metadata-Titel: Template-Platzhalter `APP_TITEL` ersetzt durch „DRK Hinweisgebersystem"
+- `docker-compose.yml`: App-Port nicht mehr am Host veröffentlicht (nur Caddy), DB-Healthcheck + `depends_on: service_healthy`
+- `Dockerfile`: läuft als Nicht-Root (`USER node`), `HOSTNAME`/`PORT` gesetzt; `next.config.ts`: `poweredByHeader: false`
+- `README.md`: Seed-Prozedur und Sicherheitsangaben an den tatsächlichen Stand angepasst
 
 ## [1.0.0] – 2026-03-18
 
